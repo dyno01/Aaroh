@@ -121,7 +121,7 @@ export default function Landing() {
 
       <footer className="land-foot">
         <span>Aaroh · the ascent through every mock.</span>
-        <span>Demo · admin@aaroh.in / Aaroh@123</span>
+        <span>Dedicated test hall for competitive aspirants</span>
       </footer>
     </div>
   );

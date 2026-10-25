@@ -239,9 +239,27 @@ router.get('/students', (_req, res) => {
 router.patch('/students/:id', (req, res) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!u) return res.status(404).json({ error: 'Not found' });
-  const { role, name } = req.body || {};
+  const { role, name, password } = req.body || {};
   if (role) db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, u.id);
   if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, u.id);
+  if (password && String(password).trim().length >= 6) {
+    const hash = bcrypt.hashSync(String(password).trim(), 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, u.id);
+  }
+  log(req, 'update_user', 'users', u.id, { role, name, passwordChanged: !!password });
+  res.json({ ok: true });
+});
+
+router.delete('/students/:id', (req, res) => {
+  const targetId = Number(req.params.id);
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  if (req.user.id === u.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account while logged in' });
+  }
+  db.prepare('DELETE FROM attempts WHERE user_id = ?').run(u.id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+  log(req, 'delete_user', 'users', u.id, { name: u.name, email: u.email, role: u.role });
   res.json({ ok: true });
 });
 

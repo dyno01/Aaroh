@@ -100,8 +100,10 @@ export default function Auth({ mode }) {
             </button>
           </form>
           <div className="demo-row">
-            <button type="button" className="chip" onClick={() => fill('demo@aaroh.in')}>Fill student demo</button>
-            <button type="button" className="chip" onClick={() => fill('admin@aaroh.in')}>Fill admin demo</button>
+            <button type="button" className="chip" onClick={() => fill('demo@aaroh.in')}>⚡ Try sample student demo</button>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+            Coaches & administrators sign in using your private email and password.
           </div>
           <p className="muted" style={{ marginTop: 18 }}>
             {isReg ? <>Already seated? <Link to="/login">Sign in</Link></> : <>New here? <Link to="/register">Create account</Link></>}
