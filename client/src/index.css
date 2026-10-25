@@ -264,7 +264,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--violet); box-sha
 }
 .rail { display: none; }
 .main { padding: 28px 32px 48px; min-width: 0; }
-.dock { display: none; }
+.dock, .mobile-dock-wrapper, .mobile-header { display: none; }
 
 /* ---------- Home ---------- */
 .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -554,29 +554,194 @@ input:focus, select:focus, textarea:focus { border-color: var(--violet); box-sha
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
   .rail { display: none; }
-  .main { padding: 18px 16px 110px; }
-  .dock {
-    display: flex; position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
-    width: min(420px, calc(100% - 20px)); background: rgba(255,252,247,.88);
-    backdrop-filter: blur(20px); border-radius: 999px; padding: 5px 6px 6px;
-    box-shadow: 0 18px 40px rgba(26,22,18,0.16); z-index: 30; align-items: flex-end; justify-content: space-between;
-    border: 1px solid rgba(255,255,255,0.8);
+  .main { padding: 70px 16px 110px; }
+
+  /* Mobile Top Header with Coach/Student Switcher */
+  .mobile-header {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: rgba(250, 247, 242, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+    padding: 0 16px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 40;
+    box-shadow: 0 2px 10px rgba(26, 22, 18, 0.04);
   }
-  .dock a, .dock button {
-    flex: 1; background: none; border: 0; color: var(--muted); font-size: 10px; font-weight: 650;
-    display: flex; flex-direction: column; align-items: center; gap: 0; padding: 0;
+
+  .mobile-header-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-  .dock a .lab, .dock button .lab {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 8px 14px; border-radius: 14px; line-height: 1;
+
+  .mobile-header-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
-  .dock a.active span.lab {
-    background: var(--violet); color: white; box-shadow: 0 8px 18px rgba(91,69,234,0.28);
+
+  .mobile-desk-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    line-height: 1.2;
+    width: fit-content;
   }
-  .dock .go {
-    width: 54px; height: 54px; border-radius: 50%; background: var(--amber); color: var(--ink);
-    display: grid; place-items: center; margin-top: -22px; box-shadow: 0 12px 24px var(--amber-glow);
-    flex: none; padding: 0;
+  .mobile-desk-pill.coach {
+    background: #FFF3D1;
+    color: #9A6B00;
+  }
+  .mobile-desk-pill.student {
+    background: var(--violet-soft);
+    color: var(--violet);
+  }
+
+  .mobile-switch-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1.5px solid var(--violet);
+    background: white;
+    color: var(--violet);
+    box-shadow: 0 2px 8px rgba(91, 69, 234, 0.12);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .mobile-switch-pill:active {
+    transform: scale(0.96);
+    background: var(--violet-soft);
+  }
+
+  /* Mobile Floating Dock (matching user image 2) */
+  .mobile-dock-wrapper {
+    display: flex;
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 20px);
+    pointer-events: none;
+  }
+
+  .mobile-dock-pill {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #EDE8DE;
+    background: rgba(237, 232, 222, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 9999px;
+    padding: 5px 6px;
+    box-shadow: 0 10px 28px rgba(26, 22, 18, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+  }
+
+  .mobile-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 42px;
+    border-radius: 9999px;
+    color: var(--ink);
+    text-decoration: none;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-tab .mobile-tab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+    transition: color 0.15s ease;
+  }
+
+  .mobile-tab .mobile-tab-label {
+    display: none;
+    white-space: nowrap;
+  }
+
+  /* Active Capsule: Solid violet pill with icon + label */
+  .mobile-tab.active {
+    background: var(--violet);
+    color: #ffffff;
+    width: auto;
+    padding: 0 18px;
+    height: 42px;
+    box-shadow: 0 4px 14px rgba(91, 69, 234, 0.35);
+    gap: 8px;
+  }
+
+  .mobile-tab.active .mobile-tab-icon {
+    color: #ffffff;
+  }
+
+  .mobile-tab.active .mobile-tab-label {
+    display: inline-block;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+
+  /* Companion Floating Circular Button */
+  .mobile-dock-companion {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #EDE8DE;
+    background: rgba(237, 232, 222, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 50%;
+    padding: 5px;
+    box-shadow: 0 10px 28px rgba(26, 22, 18, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    flex-shrink: 0;
+  }
+
+  .mobile-dock-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--violet);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(91, 69, 234, 0.35);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .mobile-dock-circle:active {
+    transform: scale(0.92);
   }
   .hero { padding: 16px 20px 48px; }
   .land-nav { padding: 16px 20px; }
