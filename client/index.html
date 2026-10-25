@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aaroh — Mock tests that feel like the real hall</title>
+    <meta name="description" content="IBPS SO IT, SEBI Grade A, NABARD Grade A mock tests. Subject drills, full mocks, high-influence papers. Hints, live admin control, exam-hall CBT." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@360;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231A1612'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='sans-serif' font-size='32' font-weight='700' fill='%23F3EFE6'%3EA%3C/text%3E%3C/svg%3E" />
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #110f0d; color: #F6F1E8; font-family: Outfit, system-ui, sans-serif; }
+      #root { min-height: 100vh; }
+      #boot { padding: 48px 28px; max-width: 420px; }
+      #boot .mark { width: 40px; height: 40px; border-radius: 12px; background: #2a2520; display: grid; place-items: center; font-weight: 800; margin-bottom: 18px; }
+      #boot h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.03em; }
+      #boot p { color: #C9C2B6; margin: 0; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot">
+        <div class="mark">A</div>
+        <h1>Aaroh</h1>
+        <p id="boot-msg">Opening the hall…</p>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        var m = document.getElementById('boot-msg');
+        if (m) m.textContent = 'Still opening. If this does not change, refresh the page.';
+      }, 6000);
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

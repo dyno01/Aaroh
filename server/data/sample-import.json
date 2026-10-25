@@ -1,0 +1,37 @@
+{
+  "exam": {
+    "code": "SOIT-IMP-AI",
+    "title": "Emerging Tech — AI/ML Drill",
+    "type": "subject",
+    "exam_family": "IBPS_SO_IT",
+    "subject": "Emerging Tech",
+    "duration_min": 6,
+    "marks_per_q": 1,
+    "negative": 0.25,
+    "max_hints": 2
+  },
+  "questions": [
+    {
+      "q_en": "In supervised learning, the training data includes",
+      "option_a": "Only unlabelled examples",
+      "option_b": "Input–output pairs (labels)",
+      "option_c": "Rewards from an environment only",
+      "option_d": "No data at all",
+      "correct": "b",
+      "hint": "Teacher provides the right answer.",
+      "explanation": "Supervised learning trains on labelled pairs (x, y). Unlabelled is unsupervised; rewards are reinforcement.",
+      "topic": "ML"
+    },
+    {
+      "q_en": "Overfitting means the model",
+      "option_a": "Performs well on train and test",
+      "option_b": "Memorises train data and generalises poorly",
+      "option_c": "Underuses capacity",
+      "option_d": "Cannot fit even the training set",
+      "correct": "b",
+      "hint": "Great on homework, fails the exam.",
+      "explanation": "Overfit models capture noise in the training set and drop on unseen data.",
+      "topic": "ML"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "exam": {
+    "code": "SOIT-SUB-DBMS-02",
+    "title": "DBMS — Subject Drill 02",
+    "type": "subject",
+    "exam_family": "IBPS_SO_IT",
+    "stage": "mains",
+    "subject": "DBMS",
+    "duration_min": 12,
+    "marks_per_q": 1,
+    "negative": 0.25,
+    "max_hints": 3,
+    "instructions": "Subject drill. −0.25 for a wrong answer. Each question has up to 3 hints."
+  },
+  "questions": [
+    {
+      "q_en": "Which normal form removes transitive partial dependencies on a non-prime attribute?",
+      "option_a": "1NF",
+      "option_b": "2NF",
+      "option_c": "3NF",
+      "option_d": "BCNF",
+      "correct": "c",
+      "topic": "Normalization",
+      "difficulty": "moderate",
+      "hint": "2NF kills partial dependence. The next one kills transitive dependence.",
+      "hint_2": "Cross out 1NF (atomicity) and BCNF (every determinant is a key).",
+      "hint_3": "The surviving form is the one that forbids A → B → C when A is the key and C is non-prime.",
+      "explanation": "3NF requires that no non-prime attribute is transitively dependent on a candidate key. 2NF only removes partial dependence on part of a composite key. BCNF is stricter still: every determinant must be a candidate key."
+    },
+    {
+      "q_en": "ACID: Atomicity guarantees that a transaction is",
+      "option_a": "Visible only after commit",
+      "option_b": "All-or-nothing",
+      "option_c": "Isolated from concurrent writers",
+      "option_d": "Durable after a crash",
+      "correct": "b",
+      "topic": "Transactions",
+      "difficulty": "easy",
+      "hint": "Think “all statements succeed, or none do”.",
+      "hint_2": "Isolation is “I”. Durability is “D”. This letter is “A”.",
+      "hint_3": "If one UPDATE fails, none of the UPDATEs in that transaction must remain.",
+      "explanation": "Atomicity means the transaction is one unit — every statement commits, or the whole thing rolls back. Visibility after commit is isolation/durability. Crash survival is durability."
+    },
+    {
+      "q_en": "Which SQL command belongs to DDL?",
+      "option_a": "UPDATE",
+      "option_b": "GRANT",
+      "option_c": "ALTER",
+      "option_d": "COMMIT",
+      "correct": "c",
+      "topic": "SQL",
+      "difficulty": "easy",
+      "hint": "DDL changes the schema, not the rows.",
+      "hint_2": "UPDATE touches data. GRANT touches permissions. COMMIT ends a transaction.",
+      "hint_3": "The leftover command can add or drop a column.",
+      "explanation": "ALTER changes table structure, so it is DDL. UPDATE is DML (rows). GRANT is DCL (privileges). COMMIT is TCL (transactions)."
+    }
+  ]
+}

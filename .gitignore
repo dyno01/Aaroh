@@ -1,0 +1,12 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+*.db-wal
+*.db-shm
+.DS_Store
+.arena/
+.cache/
+.local/
+.env
+.env.*

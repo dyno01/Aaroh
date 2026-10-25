@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: aaroh
+    runtime: node
+    buildCommand: sh render-build.sh
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
