@@ -114,8 +114,11 @@ function scoreAttempt(attempt, exam, questions) {
     };
   });
   const accuracy = correct + wrong > 0 ? (correct / (correct + wrong)) * 100 : 0;
-  return { score: +score.toFixed(2), max: +max.toFixed(2), correct, wrong, skipped, accuracy: +accuracy.toFixed(1), review };
+  const safeScore = Number.isFinite(score) ? +score.toFixed(2) : 0;
+  const safeMax = Number.isFinite(max) && max > 0 ? +max.toFixed(2) : (questions.length * Number(exam?.marks_per_q || 1));
+  return { score: safeScore, max: safeMax, correct, wrong, skipped, accuracy: +accuracy.toFixed(1), review };
 }
+
 
 router.post('/start', auth(), (req, res) => {
   const { examId, resumeId } = req.body || {};
@@ -358,10 +361,11 @@ router.get('/:id/result', auth(), (req, res) => {
   const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(attempt.exam_id);
   const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_index, id').all(exam.id);
   const result = scoreAttempt(attempt, exam, questions);
-  const better = db.prepare("SELECT COUNT(*) AS c FROM attempts WHERE exam_id = ? AND status = 'submitted' AND score > ?").get(exam.id, result.score).c;
+  const better = db.prepare("SELECT COUNT(*) AS c FROM attempts WHERE exam_id = ? AND status = 'submitted' AND score > ? AND id != ?").get(exam.id, result.score, attempt.id).c;
   const total = db.prepare("SELECT COUNT(*) AS c FROM attempts WHERE exam_id = ? AND status = 'submitted'").get(exam.id).c;
-  const rank = better + 1;
-  const percentile = total > 1 ? +(((total - rank) / (total - 1)) * 100).toFixed(1) : 100;
+  const safeTotal = Math.max(1, total);
+  const rank = Math.min(safeTotal, Math.max(1, better + 1));
+  const percentile = safeTotal > 1 ? +(((safeTotal - rank) / (safeTotal - 1)) * 100).toFixed(1) : 100;
   const bySubject = {};
   result.review.forEach((r) => {
     const key = r.subject || r.section || 'Paper';

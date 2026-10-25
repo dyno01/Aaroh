@@ -51,8 +51,10 @@ export default function ExamResult() {
     );
   }
 
-  const { result, exam, bySubject, attempt } = data;
-  const pct = result.max ? Math.round((result.score / result.max) * 100) : 0;
+  const { result = {}, exam = {}, bySubject = [], attempt = {} } = data;
+  const safeScore = Number.isFinite(result.score) ? result.score : 0;
+  const safeMax = Number.isFinite(result.max) && result.max > 0 ? result.max : 0;
+  const pct = safeMax ? Math.max(0, Math.round((safeScore / safeMax) * 100)) : 0;
   const r = 62;
   const circ = 2 * Math.PI * r;
   const dash = (Math.max(0, Math.min(100, pct)) / 100) * circ;
@@ -99,18 +101,18 @@ export default function ExamResult() {
             strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 80 80)"
           />
           <text x="80" y="78" textAnchor="middle" fill="#F6F1E8" fontSize="28" fontWeight="800" fontFamily="Outfit">{pct}%</text>
-          <text x="80" y="100" textAnchor="middle" fill="#C9C2B6" fontSize="11">of {result.max}</text>
+          <text x="80" y="100" textAnchor="middle" fill="#C9C2B6" fontSize="11">of {safeMax}</text>
         </svg>
         <div>
-          <div className="score-n">{result.score} <span style={{ fontSize: 18, color: '#C9C2B6' }}>/ {result.max}</span></div>
+          <div className="score-n">{safeScore} <span style={{ fontSize: 18, color: '#C9C2B6' }}>/ {safeMax}</span></div>
           <div style={{ color: '#C9C2B6', marginTop: 6 }}>
-            Rank {result.rank} of {result.totalAttempts} on this paper · percentile {result.percentile}
+            Rank {result.rank || 1} of {Math.max(1, result.totalAttempts || 1)} on this paper · percentile {result.percentile ?? 100}
           </div>
           <div className="stats-4">
-            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.correct}</div><div className="l">Correct</div></div>
-            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.wrong}</div><div className="l">Wrong</div></div>
-            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.skipped}</div><div className="l">Skipped</div></div>
-            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.accuracy}%</div><div className="l">Accuracy</div></div>
+            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.correct ?? 0}</div><div className="l">Correct</div></div>
+            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.wrong ?? 0}</div><div className="l">Wrong</div></div>
+            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.skipped ?? 0}</div><div className="l">Skipped</div></div>
+            <div className="kpi" style={{ background: '#2a2520', color: '#fff' }}><div className="n">{result.accuracy ?? 0}%</div><div className="l">Accuracy</div></div>
           </div>
         </div>
       </div>
@@ -133,9 +135,9 @@ export default function ExamResult() {
         </div>
       )}
 
-      <div className="card result-keep" style={{ marginTop: 16 }}>
+      <div className="card result-keep" style={{ marginTop: 24, marginBottom: 28 }}>
         <h3 style={{ margin: 0 }}>Come back to this paper</h3>
-        <p className="lead" style={{ margin: '6px 0 12px', maxWidth: 'none' }}>
+        <p className="lead" style={{ margin: '6px 0 14px', maxWidth: 'none' }}>
           The review is saved. Open it later from <b>Stats → History</b>, or tap <b>Review</b> on this paper in Tests.
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -145,7 +147,7 @@ export default function ExamResult() {
         </div>
       </div>
 
-      <div className="page-head" style={{ marginBottom: 12 }}>
+      <div className="page-head" style={{ marginTop: 32, marginBottom: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
         <h3 style={{ margin: 0 }}>Answer review</h3>
         <div className="filters" style={{ margin: 0 }}>
           {FILTERS.map((f) => (
