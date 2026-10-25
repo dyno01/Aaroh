@@ -17,9 +17,10 @@ const adminNav = [
   { to: '/app/admin', label: 'Home', icon: LayoutDashboard, end: true },
   { to: '/app/admin/exams', label: 'Papers', icon: BookOpen },
   { to: '/app/admin/live', label: 'Live', icon: Radio },
+  { to: '/app/admin/students', label: 'People', icon: Users },
+  { to: '/app/admin/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/app/admin/import', label: 'Import', icon: Upload },
-  { to: '/app/admin/styles', label: 'Buttons', icon: Tags },
-  { to: '/app/admin/students', label: 'People', icon: Users }
+  { to: '/app/admin/styles', label: 'Buttons', icon: Tags }
 ];
 
 function IconBtn({ to, end, label, icon: Icon }) {

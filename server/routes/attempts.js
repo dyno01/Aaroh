@@ -250,7 +250,18 @@ router.post('/:id/submit', auth(), (req, res) => {
 });
 
 router.get('/:id/result', auth(), (req, res) => {
-  const attempt = db.prepare('SELECT * FROM attempts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  const attempt = req.user.role === 'admin'
+    ? db.prepare(`
+        SELECT a.*, u.name AS user_name, u.email AS user_email
+        FROM attempts a JOIN users u ON u.id = a.user_id
+        WHERE a.id = ?
+      `).get(req.params.id)
+    : db.prepare(`
+        SELECT a.*, u.name AS user_name, u.email AS user_email
+        FROM attempts a JOIN users u ON u.id = a.user_id
+        WHERE a.id = ? AND a.user_id = ?
+      `).get(req.params.id, req.user.id);
+
   if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
   if (attempt.status !== 'submitted' && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Submit the paper to see results' });
@@ -275,6 +286,9 @@ router.get('/:id/result', auth(), (req, res) => {
   res.json({
     attempt: {
       id: attempt.id,
+      user_id: attempt.user_id,
+      user_name: attempt.user_name,
+      user_email: attempt.user_email,
       started_at: attempt.started_at,
       submitted_at: attempt.submitted_at,
       hints_used: attempt.hints_used

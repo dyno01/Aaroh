@@ -1,24 +1,51 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart3, Clock, CheckCircle2, XCircle, Award, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth.jsx';
 import { useToast } from '../../lib/toast.jsx';
-import { Avatar, PageHead } from '../../components/ui.jsx';
+import { Avatar, PageHead, Loading } from '../../components/ui.jsx';
 
 export default function AdminStudents() {
   const { user: currentUser, refresh } = useAuth();
   const [rows, setRows] = useState([]);
   const [form, setForm] = useState({ name: '', email: '', password: 'Password@123', role: 'student' });
   const [editing, setEditing] = useState(null);
+  const [perfStudent, setPerfStudent] = useState(null);
+  const [perfData, setPerfData] = useState(null);
+  const [loadingPerf, setLoadingPerf] = useState(false);
+  const [searchParams] = useSearchParams();
+  const nav = useNavigate();
   const toast = useToast();
 
   function load() {
     api('/api/admin/students')
-      .then((d) => setRows(d.students || []))
+      .then((d) => {
+        const list = d.students || [];
+        setRows(list);
+        const queryStudentId = searchParams.get('studentId');
+        if (queryStudentId) {
+          const match = list.find((s) => String(s.id) === String(queryStudentId));
+          if (match) openPerformance(match);
+        }
+      })
       .catch((err) => {
         toast.push(err.message || 'Failed to load students');
       });
   }
   useEffect(load, []);
+
+  function openPerformance(u) {
+    setPerfStudent(u);
+    setLoadingPerf(true);
+    setPerfData(null);
+    api(`/api/admin/students/${u.id}/performance`)
+      .then(setPerfData)
+      .catch((err) => {
+        toast.push(err.message || 'Could not load student performance');
+      })
+      .finally(() => setLoadingPerf(false));
+  }
 
   async function create(e) {
     e.preventDefault();
@@ -107,7 +134,7 @@ export default function AdminStudents() {
       <PageHead
         kicker="Directory"
         title="People"
-        lead="Manage students and administrators. Update names, emails, roles, and reset credentials anytime."
+        lead="Manage students and administrators. View each student's performance, test results, and analytics."
       />
 
       <form className="card" onSubmit={create}>
@@ -161,7 +188,7 @@ export default function AdminStudents() {
               <th>Email</th>
               <th>Role</th>
               <th>Tests</th>
-              <th>Avg</th>
+              <th>Avg Score</th>
               <th>Streak</th>
               <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
@@ -191,11 +218,20 @@ export default function AdminStudents() {
                       {u.role}
                     </span>
                   </td>
-                  <td>{u.tests}</td>
+                  <td><b>{u.tests}</b></td>
                   <td>{u.avg_score ?? '—'}</td>
                   <td>{u.streak}</td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-violet"
+                        title="View complete test results and analytics"
+                        onClick={() => openPerformance(u)}
+                      >
+                        Performance
+                      </button>
+
                       <button
                         type="button"
                         className="btn btn-sm btn-line"
@@ -235,6 +271,161 @@ export default function AdminStudents() {
         </table>
       </div>
 
+      {/* Student Performance & Test Results Modal */}
+      {perfStudent && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(26, 22, 18, 0.75)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 16
+        }}>
+          <div className="card" style={{ maxWidth: 840, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.35)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <Avatar name={perfStudent.name} color={perfStudent.avatar_color} size={42} />
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 20 }}>{perfStudent.name} — Performance & Analytics</h2>
+                  <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 2 }}>
+                    {perfStudent.email} · {perfStudent.role} · streak {perfStudent.streak}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-line"
+                onClick={() => setPerfStudent(null)}
+                style={{ padding: '4px 10px' }}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {loadingPerf ? (
+              <Loading label="Analyzing student submissions…" />
+            ) : !perfData ? (
+              <p className="lead">Could not retrieve performance details.</p>
+            ) : (
+              <div>
+                {/* KPI Metrics */}
+                <div className="kpi-row" style={{ marginBottom: 18 }}>
+                  <div className="kpi">
+                    <div className="n">{perfData.stats.tests_taken}</div>
+                    <div className="l">Tests Taken</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="n">{perfData.stats.avg_score}</div>
+                    <div className="l">Average Score</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="n">{perfData.stats.best_score}</div>
+                    <div className="l">Best Score</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="n">{perfData.stats.avg_accuracy}%</div>
+                    <div className="l">Mean Accuracy</div>
+                  </div>
+                </div>
+
+                {/* Subject Mastery Breakdown */}
+                {perfData.subjects?.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <h3 style={{ fontSize: 16, marginBottom: 10 }}>Subject Breakdown & Accuracy</h3>
+                    <div className="stack" style={{ gap: 8 }}>
+                      {perfData.subjects.map((sub) => (
+                        <div key={sub.subject} style={{ background: 'var(--surface-sunken)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
+                            <b>{sub.subject}</b>
+                            <span style={{ fontWeight: 700, color: sub.accuracy >= 70 ? 'var(--green, #1F9D6C)' : sub.accuracy < 50 ? 'var(--red, #E24B4A)' : 'var(--amber, #F0B429)' }}>
+                              {sub.accuracy}% accuracy
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 12 }}>
+                            <span>✓ {sub.correct} correct</span>
+                            <span>✗ {sub.wrong} wrong</span>
+                            <span>- {sub.skipped} skipped</span>
+                            <span>Total questions: {sub.total}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Submitted Tests List */}
+                <h3 style={{ fontSize: 16, marginBottom: 10 }}>Submitted Test Papers</h3>
+                {perfData.attempts?.length === 0 ? (
+                  <p className="lead" style={{ fontSize: 14, color: 'var(--muted)' }}>
+                    {perfStudent.name} has not submitted any tests yet.
+                  </p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Paper</th>
+                          <th>Score</th>
+                          <th>Accuracy</th>
+                          <th>Questions</th>
+                          <th>Time</th>
+                          <th>Submitted</th>
+                          <th style={{ textAlign: 'right' }}>Review</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {perfData.attempts.map((att) => (
+                          <tr key={att.id}>
+                            <td>
+                              <b>{att.title}</b>
+                              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{att.code}</div>
+                            </td>
+                            <td>
+                              <b>{att.score}</b> <span style={{ fontSize: 12, color: 'var(--muted)' }}>/ {att.max_score}</span>
+                            </td>
+                            <td>
+                              <span className={`tag ${att.accuracy >= 70 ? 'green' : att.accuracy < 50 ? 'amber' : ''}`}>
+                                {att.accuracy}%
+                              </span>
+                            </td>
+                            <td style={{ fontSize: 12 }}>
+                              <span style={{ color: 'var(--green, #1F9D6C)', fontWeight: 600 }}>{att.correct_count}✓</span>
+                              {' · '}
+                              <span style={{ color: 'var(--red, #E24B4A)', fontWeight: 600 }}>{att.wrong_count}✗</span>
+                              {' · '}
+                              <span style={{ color: 'var(--muted)' }}>{att.skipped_count}-</span>
+                            </td>
+                            <td style={{ fontSize: 12 }}>{Math.round((att.duration_sec || 0) / 60)}m</td>
+                            <td style={{ fontSize: 12, color: 'var(--muted)' }}>
+                              {new Date(att.submitted_at).toLocaleDateString()}
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                className="btn btn-sm btn-violet"
+                                onClick={() => nav(`/app/result/${att.id}`)}
+                              >
+                                View Result
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
       {editing && (
         <div style={{
           position: 'fixed',

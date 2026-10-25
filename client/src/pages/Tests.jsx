@@ -1,25 +1,33 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Clock, FileQuestion, Search } from 'lucide-react';
+import { Clock, FileQuestion, Search, CheckCircle2, RotateCcw, Eye, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
 import { Empty, PageHead } from '../components/ui.jsx';
 
 function pretty(slug) {
   const known = {
     subject: 'Subject-wise',
+    subject_drill: 'Subject drill',
     full: 'Full mock',
-    high_influence: 'High influence'
+    full_mock: 'Full mock',
+    high_influence: 'High influence',
+    high_influence_pk: 'High influence PK',
+    debugging_error_test: 'Debugging error test'
   };
   if (known[slug]) return known[slug];
-  return String(slug || '').replace(/[_-]+/g, ' ');
+  return String(slug || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function Tests() {
   const [exams, setExams] = useState([]);
-  const [families, setFamilies] = useState([{ id: '', label: 'All exams' }]);
-  const [types, setTypes] = useState([{ id: '', label: 'All papers' }]);
+  const [catalogFamilies, setCatalogFamilies] = useState([]);
+  const [catalogTypes, setCatalogTypes] = useState([]);
   const [soon, setSoon] = useState([]);
   const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'attempted' | 'unattempted'
   const [params, setParams] = useSearchParams();
   const type = params.get('type') || '';
   const family = params.get('family') || '';
@@ -30,30 +38,91 @@ export default function Tests() {
     api('/api/exams/catalog').then((d) => {
       const fam = d.families || [];
       const ty = d.types || [];
-      setFamilies([{ id: '', label: 'All exams' }, ...fam]);
-      setTypes([{ id: '', label: 'All papers' }, ...ty]);
+      setCatalogFamilies(fam);
+      setCatalogTypes(ty);
       setSoon(fam.filter((f) => f.coming_soon));
     }).catch(() => {});
   }, []);
 
+  // Compute test counts for each family
+  const familyList = useMemo(() => {
+    const total = exams.length;
+    const base = [{ id: '', label: 'All exams', count: total }];
+    const seen = new Set();
+    const all = [...catalogFamilies];
+    // Gather any family found in exams
+    exams.forEach((e) => {
+      if (e.exam_family && !all.some((f) => f.id === e.exam_family)) {
+        all.push({ id: e.exam_family, label: pretty(e.exam_family), coming_soon: false });
+      }
+    });
+
+    all.forEach((f) => {
+      if (!f.id || seen.has(f.id)) return;
+      seen.add(f.id);
+      const count = exams.filter((e) => e.exam_family === f.id).length;
+      if (f.coming_soon || count > 0) {
+        base.push({ ...f, count });
+      }
+    });
+    return base;
+  }, [catalogFamilies, exams]);
+
+  // Exams matching the chosen family
+  const familyFilteredExams = useMemo(() => {
+    if (!family) return exams;
+    return exams.filter((e) => e.exam_family === family);
+  }, [exams, family]);
+
+  // Compute test counts for each paper style / type under the active family
+  const typeList = useMemo(() => {
+    const total = familyFilteredExams.length;
+    const base = [{ id: '', label: 'All papers', count: total }];
+    const seen = new Set();
+    const all = [...catalogTypes];
+    // Gather any types found in exams
+    exams.forEach((e) => {
+      if (e.type && !all.some((t) => t.id === e.type)) {
+        all.push({ id: e.type, label: pretty(e.type), coming_soon: false });
+      }
+    });
+
+    all.forEach((t) => {
+      if (!t.id || seen.has(t.id)) return;
+      seen.add(t.id);
+      const count = familyFilteredExams.filter((e) => e.type === t.id).length;
+      if (t.coming_soon || count > 0) {
+        base.push({ ...t, count });
+      }
+    });
+    return base;
+  }, [catalogTypes, familyFilteredExams, exams]);
+
+  // Completed stats
+  const completedCount = useMemo(() => exams.filter((e) => e.my && e.my.n > 0).length, [exams]);
+  const unattemptedCount = Math.max(0, exams.length - completedCount);
+
+  // Final filtered list
   const list = useMemo(() => exams.filter((e) => {
     if (type && e.type !== type) return false;
     if (family && e.exam_family !== family) return false;
+    if (statusFilter === 'attempted' && (!e.my || !e.my.n)) return false;
+    if (statusFilter === 'unattempted' && (e.my && e.my.n > 0)) return false;
     if (q && !`${e.title} ${e.subject || ''} ${e.code}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
-  }), [exams, type, q, family]);
+  }), [exams, type, q, family, statusFilter]);
 
   function setFilter(next) {
     const cur = {};
-    if (next.family ?? family) cur.family = next.family ?? family;
-    if (next.type ?? type) cur.type = next.type ?? type;
-    if (!cur.family) delete cur.family;
-    if (!cur.type) delete cur.type;
+    const nextFamily = next.family !== undefined ? next.family : family;
+    const nextType = next.type !== undefined ? next.type : type;
+    if (nextFamily) cur.family = nextFamily;
+    if (nextType) cur.type = nextType;
     setParams(cur);
   }
 
   function typeLabel(id) {
-    return types.find((t) => t.id === id)?.label || pretty(id);
+    return typeList.find((t) => t.id === id)?.label || pretty(id);
   }
 
   return (
@@ -61,60 +130,225 @@ export default function Tests() {
       <PageHead
         kicker="Question bank"
         title="Choose a paper"
-        lead="Filters follow the papers you import. New exam or style in the template becomes a button here."
+        lead="Select a paper to test your speed and accuracy. Each category displays exact available test counts."
       />
 
+      {/* Primary Exam Family Filters */}
       <div className="filters" aria-label="Exams">
-        {families.map((t) => (
-          <button key={t.id || 'all-ex'} className={`seg ${family === t.id ? 'on' : ''}`} onClick={() => setFilter({ family: t.id })}>
-            {t.label}{t.coming_soon ? ' · soon' : ''}
+        {familyList.map((t) => (
+          <button
+            key={t.id || 'all-ex'}
+            className={`seg ${family === t.id ? 'on' : ''}`}
+            onClick={() => setFilter({ family: t.id })}
+          >
+            <span>{t.label}</span>
+            {t.coming_soon ? (
+              <span className="seg-n">soon</span>
+            ) : (
+              <span className="seg-n">{t.count}</span>
+            )}
           </button>
         ))}
       </div>
+
+      {/* Paper Style / Type Filters with search & status quick filters */}
       <div className="filter-toolbar">
         <div className="filters" aria-label="Paper styles" style={{ margin: 0 }}>
-          {types.map((t) => (
-            <button key={t.id || 'all-ty'} className={`seg ${type === t.id ? 'on' : ''}`} onClick={() => setFilter({ type: t.id })}>
-              {t.label}
+          {typeList.map((t) => (
+            <button
+              key={t.id || 'all-ty'}
+              className={`seg ${type === t.id ? 'on' : ''}`}
+              onClick={() => setFilter({ type: t.id })}
+            >
+              <span>{t.label}</span>
+              {t.coming_soon ? (
+                <span className="seg-n">soon</span>
+              ) : (
+                <span className="seg-n">{t.count}</span>
+              )}
             </button>
           ))}
         </div>
         <label className="search">
           <Search size={16} color="#8A8378" />
-          <input placeholder="Search DBMS, prelims, SEBI…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input
+            placeholder="Search DBMS, prelims, SEBI…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
         </label>
       </div>
 
-      <div className="test-grid">
-        {list.map((e) => (
-          <article key={e.id} className="test-card">
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span className={`tag ${e.type === 'high_influence' ? 'gold' : e.type === 'full' ? 'ink' : ''}`}>
-                {typeLabel(e.type)}
-              </span>
-              {e.stage && <span className="tag green">{e.stage}</span>}
-            </div>
-            <h3>{e.title}</h3>
-            <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.45 }}>{e.description}</div>
-            <div className="meta-line">
-              <span><FileQuestion size={13} /> {e.question_count} Q</span>
-              <span><Clock size={13} /> {Math.round(e.duration_sec / 60)} min</span>
-              <span>{e.total_marks} marks</span>
-              {e.max_hints > 0 && <span>{e.max_hints} hints</span>}
-            </div>
-            <div className="foot">
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{e.my ? `Best ${e.my.best}` : 'Not attempted'}</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {e.my?.last_id && (
-                  <button className="btn btn-sm btn-line" type="button" onClick={() => nav(`/app/result/${e.my.last_id}`)}>Review</button>
-                )}
-                <button className="btn btn-sm btn-violet" type="button" onClick={() => nav(`/app/exam/${e.id}`)}>Sit</button>
-              </div>
-            </div>
-          </article>
-        ))}
+      {/* Status quick toggle bar so student immediately sees progress */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 0 18px', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status:</span>
+          <button
+            type="button"
+            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-ink' : 'btn-line'}`}
+            style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12 }}
+            onClick={() => setStatusFilter('all')}
+          >
+            All papers ({exams.length})
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${statusFilter === 'attempted' ? 'btn-green' : 'btn-line'}`}
+            style={{
+              borderRadius: 999,
+              padding: '4px 12px',
+              fontSize: 12,
+              background: statusFilter === 'attempted' ? '#137333' : undefined,
+              color: statusFilter === 'attempted' ? '#fff' : undefined,
+              borderColor: statusFilter === 'attempted' ? '#137333' : undefined
+            }}
+            onClick={() => setStatusFilter('attempted')}
+          >
+            ✓ Attempted ({completedCount})
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${statusFilter === 'unattempted' ? 'btn-ink' : 'btn-line'}`}
+            style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12 }}
+            onClick={() => setStatusFilter('unattempted')}
+          >
+            Not attempted ({unattemptedCount})
+          </button>
+        </div>
+
+        {completedCount > 0 && (
+          <div style={{ fontSize: 12, color: '#137333', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <CheckCircle2 size={14} strokeWidth={2.4} />
+            <span>You completed {completedCount} of {exams.length} papers ({Math.round((completedCount / (exams.length || 1)) * 100)}%)</span>
+          </div>
+        )}
       </div>
-      {!list.length && <Empty title="No papers match" text="Import a CSV from the coach desk, or pick another filter." />}
+
+      {/* Test Cards Grid */}
+      <div className="test-grid">
+        {list.map((e) => {
+          const isAttempted = Boolean(e.my && e.my.n > 0);
+          const bestScore = e.my?.best ?? 0;
+          const bestPct = e.total_marks > 0 ? Math.round((bestScore / e.total_marks) * 100) : 0;
+
+          return (
+            <article
+              key={e.id}
+              className={`test-card ${isAttempted ? 'completed' : ''}`}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, width: '100%', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span className={`tag ${e.type === 'high_influence_pk' || e.type === 'high_influence' ? 'gold' : e.type === 'full_mock' || e.type === 'full' ? 'ink' : ''}`}>
+                    {typeLabel(e.type)}
+                  </span>
+                  {e.stage && <span className="tag green">{e.stage}</span>}
+                </div>
+
+                {/* Prominent label when test is completed/attempted */}
+                {isAttempted ? (
+                  <span
+                    className="tag green"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontWeight: 700,
+                      background: '#E6F4EA',
+                      color: '#137333',
+                      border: '1px solid #CEEAD6',
+                      padding: '3px 9px',
+                      borderRadius: 999,
+                      fontSize: 12
+                    }}
+                  >
+                    <CheckCircle2 size={13} strokeWidth={2.6} /> Attempted · Best {bestScore}/{e.total_marks} ({bestPct}%)
+                  </span>
+                ) : (
+                  <span
+                    className="tag"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--muted)',
+                      background: 'rgba(26,22,18,0.04)',
+                      border: '1px solid var(--border)',
+                      padding: '3px 8px',
+                      borderRadius: 999
+                    }}
+                  >
+                    Not attempted
+                  </span>
+                )}
+              </div>
+
+              <h3 style={{ marginTop: 2 }}>{e.title}</h3>
+              <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.45 }}>{e.description}</div>
+
+              <div className="meta-line">
+                <span><FileQuestion size={13} /> {e.question_count} Q</span>
+                <span><Clock size={13} /> {Math.round(e.duration_sec / 60)} min</span>
+                <span>{e.total_marks} marks</span>
+                {e.max_hints > 0 && <span>{e.max_hints} hints</span>}
+              </div>
+
+              <div className="foot" style={{ paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                <div>
+                  {isAttempted ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#137333', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} strokeWidth={2.5} /> Completed {e.my.n > 1 ? `(${e.my.n} attempts)` : ''}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        Best: {bestScore}/{e.total_marks} ({bestPct}%)
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      Ready to sit
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {e.my?.last_id && (
+                    <button
+                      className="btn btn-sm btn-line"
+                      type="button"
+                      title="Review questions & solutions"
+                      onClick={() => nav(`/app/result/${e.my.last_id}`)}
+                    >
+                      <Eye size={13} /> Review
+                    </button>
+                  )}
+                  <button
+                    className={`btn btn-sm ${isAttempted ? 'btn-line' : 'btn-violet'}`}
+                    type="button"
+                    onClick={() => nav(`/app/exam/${e.id}`)}
+                  >
+                    {isAttempted ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <RotateCcw size={12} /> Retake
+                      </span>
+                    ) : (
+                      'Sit paper →'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {!list.length && (
+        <Empty
+          title="No papers match"
+          text={
+            statusFilter !== 'all'
+              ? `You don't have any papers under "${statusFilter}". Try switching back to "All papers".`
+              : "Import a CSV from the coach desk, or pick another filter."
+          }
+        />
+      )}
 
       {soon.length > 0 && (
         <div className="grid-home" style={{ marginTop: 28 }}>

@@ -72,6 +72,13 @@ function syncFromExams(db) {
     .forEach((r) => upsertStyle(db, 'family', r.s, prettySlug(r.s), { live: true }));
   db.prepare('SELECT DISTINCT type AS s FROM exams WHERE type IS NOT NULL').all()
     .forEach((r) => upsertStyle(db, 'type', r.s, prettySlug(r.s), { live: true }));
+
+  // Prune any type styles that have 0 exams and are not coming soon
+  const activeTypes = db.prepare('SELECT DISTINCT type FROM exams').all().map((r) => r.type);
+  if (activeTypes.length > 0) {
+    const ph = activeTypes.map(() => '?').join(',');
+    db.prepare(`DELETE FROM paper_styles WHERE kind = 'type' AND coming_soon = 0 AND slug NOT IN (${ph})`).run(...activeTypes);
+  }
 }
 
 function listStyles(db, kind) {
@@ -82,9 +89,28 @@ function listStyles(db, kind) {
 
 function catalog(db) {
   syncFromExams(db);
+  const typeCounts = Object.fromEntries(
+    db.prepare("SELECT type, COUNT(*) AS c FROM exams WHERE is_published = 1 AND coming_soon = 0 GROUP BY type").all().map((r) => [r.type, r.c])
+  );
+  const familyCounts = Object.fromEntries(
+    db.prepare("SELECT exam_family, COUNT(*) AS c FROM exams WHERE is_published = 1 AND coming_soon = 0 GROUP BY exam_family").all().map((r) => [r.exam_family, r.c])
+  );
+  const totalExams = db.prepare("SELECT COUNT(*) AS c FROM exams WHERE is_published = 1 AND coming_soon = 0").get().c;
+
   return {
-    families: listStyles(db, 'family').map((r) => ({ id: r.slug, label: r.label, coming_soon: !!r.coming_soon })),
-    types: listStyles(db, 'type').map((r) => ({ id: r.slug, label: r.label, coming_soon: !!r.coming_soon }))
+    total: totalExams,
+    families: listStyles(db, 'family').map((r) => ({
+      id: r.slug,
+      label: r.label,
+      coming_soon: !!r.coming_soon,
+      count: familyCounts[r.slug] || 0
+    })),
+    types: listStyles(db, 'type').map((r) => ({
+      id: r.slug,
+      label: r.label,
+      coming_soon: !!r.coming_soon,
+      count: typeCounts[r.slug] || 0
+    }))
   };
 }
 

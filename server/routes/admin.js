@@ -284,6 +284,112 @@ router.delete('/students/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/students/:id/performance', (req, res) => {
+  const targetId = Number(req.params.id);
+  const u = db.prepare('SELECT id, name, email, role, streak, created_at, last_active, avatar_color FROM users WHERE id = ?').get(targetId);
+  if (!u) return res.status(404).json({ error: 'Student not found' });
+
+  const attempts = db.prepare(`
+    SELECT a.id, a.exam_id, a.status, a.score, a.max_score, a.accuracy, a.correct_count, a.wrong_count,
+           a.skipped_count, a.duration_sec, a.hints_used, a.started_at, a.submitted_at,
+           e.title, e.code, e.exam_family, e.type, e.subject
+    FROM attempts a JOIN exams e ON e.id = a.exam_id
+    WHERE a.user_id = ? AND a.status = 'submitted'
+    ORDER BY a.submitted_at DESC
+  `).all(u.id);
+
+  const liveAttempt = db.prepare(`
+    SELECT a.id, a.exam_id, a.started_at, a.current_section, a.hints_used, e.title, e.code
+    FROM attempts a JOIN exams e ON e.id = a.exam_id
+    WHERE a.user_id = ? AND a.status = 'in_progress'
+    LIMIT 1
+  `).get(u.id);
+
+  const bySubject = {};
+  for (const a of attempts) {
+    const questions = db.prepare('SELECT id, subject, section, topic, correct FROM questions WHERE exam_id = ?').all(a.exam_id);
+    const row = db.prepare('SELECT answers_json FROM attempts WHERE id = ?').get(a.id);
+    let answers = {};
+    try { answers = JSON.parse(row?.answers_json || '{}'); } catch { answers = {}; }
+    for (const q of questions) {
+      const chosen = answers[q.id]?.option;
+      const sub = q.subject || q.section || a.subject || 'Paper';
+      bySubject[sub] ||= { subject: sub, correct: 0, wrong: 0, skipped: 0, total: 0 };
+      bySubject[sub].total += 1;
+      if (!chosen) bySubject[sub].skipped += 1;
+      else if (chosen === q.correct) bySubject[sub].correct += 1;
+      else bySubject[sub].wrong += 1;
+    }
+  }
+
+  const subjects = Object.values(bySubject).map((s) => {
+    const attempted = s.correct + s.wrong;
+    const accuracy = attempted > 0 ? +((s.correct / attempted) * 100).toFixed(1) : 0;
+    return { ...s, attempted, accuracy };
+  }).sort((a, b) => b.accuracy - a.accuracy);
+
+  const totalScore = attempts.reduce((acc, cur) => acc + (cur.score || 0), 0);
+  const avgScore = attempts.length > 0 ? +(totalScore / attempts.length).toFixed(1) : 0;
+  const bestScore = attempts.length > 0 ? Math.max(...attempts.map(a => a.score || 0)) : 0;
+  const avgAccuracy = attempts.length > 0 ? +(attempts.reduce((acc, cur) => acc + (cur.accuracy || 0), 0) / attempts.length).toFixed(1) : 0;
+
+  res.json({
+    student: u,
+    stats: {
+      tests_taken: attempts.length,
+      avg_score: avgScore,
+      best_score: bestScore,
+      avg_accuracy: avgAccuracy
+    },
+    subjects,
+    attempts,
+    liveAttempt: liveAttempt || null
+  });
+});
+
+router.get('/analytics', (_req, res) => {
+  const students = db.prepare("SELECT id, name, email, streak, last_active FROM users WHERE role = 'student'").all();
+  const totalAttempts = db.prepare("SELECT COUNT(*) AS c FROM attempts WHERE status = 'submitted'").get().c;
+  const avgAccuracy = db.prepare("SELECT ROUND(AVG(accuracy), 1) AS a FROM attempts WHERE status = 'submitted'").get().a || 0;
+  const avgScore = db.prepare("SELECT ROUND(AVG(score), 1) AS s FROM attempts WHERE status = 'submitted'").get().s || 0;
+
+  const recentAttempts = db.prepare(`
+    SELECT a.id, a.user_id, a.exam_id, a.score, a.max_score, a.accuracy, a.correct_count, a.wrong_count,
+           a.skipped_count, a.duration_sec, a.hints_used, a.submitted_at,
+           u.name AS student_name, u.email AS student_email,
+           e.title AS exam_title, e.code AS exam_code, e.subject AS exam_subject
+    FROM attempts a
+    JOIN users u ON u.id = a.user_id
+    JOIN exams e ON e.id = a.exam_id
+    WHERE a.status = 'submitted'
+    ORDER BY a.submitted_at DESC
+    LIMIT 50
+  `).all();
+
+  const examsSummary = db.prepare(`
+    SELECT e.id, e.code, e.title, e.subject,
+           COUNT(a.id) AS attempts_count,
+           ROUND(AVG(a.score), 1) AS avg_score,
+           ROUND(AVG(a.accuracy), 1) AS avg_accuracy
+    FROM exams e
+    LEFT JOIN attempts a ON a.exam_id = e.id AND a.status = 'submitted'
+    GROUP BY e.id
+    ORDER BY attempts_count DESC, e.title ASC
+  `).all();
+
+  res.json({
+    summary: {
+      total_students: students.length,
+      total_attempts: totalAttempts,
+      avg_accuracy: avgAccuracy,
+      avg_score: avgScore
+    },
+    students,
+    recentAttempts,
+    examsSummary
+  });
+});
+
 router.get('/audit', (_req, res) => {
   const rows = db.prepare(`
     SELECT l.*, u.name AS admin_name

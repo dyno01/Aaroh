@@ -21,6 +21,7 @@ import AdminImport from './pages/admin/AdminImport.jsx';
 import AdminLive from './pages/admin/AdminLive.jsx';
 import AdminStudents from './pages/admin/AdminStudents.jsx';
 import AdminStyles from './pages/admin/AdminStyles.jsx';
+import AdminAnalytics from './pages/admin/AdminAnalytics.jsx';
 
 function Guard({ children, admin }) {
   const { user, ready } = useAuth();
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="admin/import" element={<Guard admin><AdminImport /></Guard>} />
             <Route path="admin/live" element={<Guard admin><AdminLive /></Guard>} />
             <Route path="admin/students" element={<Guard admin><AdminStudents /></Guard>} />
+            <Route path="admin/analytics" element={<Guard admin><AdminAnalytics /></Guard>} />
             <Route path="admin/styles" element={<Guard admin><AdminStyles /></Guard>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, X, Minus, Clock, Lightbulb } from 'lucide-react';
+import { Check, X, Minus, Clock, Lightbulb, UserCheck } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -12,6 +13,7 @@ const FILTERS = [
 
 export default function ExamResult() {
   const { attemptId } = useParams();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState('all');
   const [err, setErr] = useState('');
@@ -56,6 +58,34 @@ export default function ExamResult() {
 
   return (
     <div className="rise result-page">
+      {user?.role === 'admin' && attempt?.user_name && attempt.user_id !== user.id && (
+        <div style={{
+          background: 'linear-gradient(90deg, #F0EBF8 0%, #F5F1FA 100%)',
+          border: '1px solid #D8C7F0',
+          borderRadius: 14,
+          padding: '12px 18px',
+          marginBottom: 18,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="tag ink" style={{ background: '#5B45EA', color: '#fff', fontWeight: 700 }}>Coach Review</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+              Inspecting {attempt.user_name}’s paper ({attempt.user_email})
+            </span>
+          </div>
+          <button
+            className="btn btn-sm btn-line"
+            type="button"
+            onClick={() => nav('/app/admin/students')}
+          >
+            ← Back to Students
+          </button>
+        </div>
+      )}
       <p className="date-k">{exam.code} · submitted {attempt.submitted_at}</p>
       <h1 className="hello" style={{ fontSize: 36 }}>{exam.title}</h1>
       <p className="lead">Each question: the rule, why the key is right, why the others fail. This review stays in Stats and on the paper in Tests.</p>

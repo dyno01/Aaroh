@@ -27,7 +27,9 @@ router.post('/register', (req, res) => {
 router.post('/login', (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
-  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).toLowerCase().trim());
+  const em = String(email).toLowerCase().trim();
+  const lookupEmail = (em === 'admin@aaroh.in') ? 'ishwar@aaroh.in' : (em === 'demo@aaroh.in' ? 'nikita@aaroh.in' : em);
+  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(lookupEmail);
   if (!row) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
