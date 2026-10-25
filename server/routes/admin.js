@@ -152,6 +152,110 @@ function buildChangeMessage(b) {
   return bits.length ? `Live update: ${bits.join(' · ')}` : 'Exam settings updated — applied instantly';
 }
 
+router.post('/exams/batch-settings', (req, res) => {
+  const {
+    scope = 'all',
+    exam_family,
+    exam_ids,
+    settings = {},
+    _message
+  } = req.body || {};
+
+  const mergedSettings = { ...settings };
+  for (const k of SETTINGS_KEYS) {
+    if (req.body[k] !== undefined && mergedSettings[k] === undefined) {
+      mergedSettings[k] = req.body[k];
+    }
+  }
+
+  let targetExams = [];
+  if (scope === 'selected' && Array.isArray(exam_ids) && exam_ids.length) {
+    const ph = exam_ids.map(() => '?').join(',');
+    targetExams = db.prepare(`SELECT id, title, exam_family FROM exams WHERE id IN (${ph})`).all(...exam_ids);
+  } else if (scope === 'family' && exam_family) {
+    targetExams = db.prepare('SELECT id, title, exam_family FROM exams WHERE exam_family = ?').all(exam_family);
+  } else {
+    targetExams = db.prepare('SELECT id, title, exam_family FROM exams').all();
+  }
+
+  if (!targetExams.length) {
+    return res.status(400).json({ error: 'No matching papers found' });
+  }
+
+  const updates = [];
+  const params = [];
+  for (const k of SETTINGS_KEYS) {
+    if (mergedSettings[k] !== undefined) {
+      const v = mergedSettings[k];
+      updates.push(`${k} = ?`);
+      params.push(typeof v === 'boolean' ? (v ? 1 : 0) : v);
+    }
+  }
+
+  let addExtraSec = 0;
+  if (req.body.add_extra_time_sec || mergedSettings.add_extra_time_sec) {
+    addExtraSec = Number(req.body.add_extra_time_sec || mergedSettings.add_extra_time_sec);
+  }
+
+  if (!updates.length && !addExtraSec) {
+    return res.status(400).json({ error: 'No permissions or settings provided to update' });
+  }
+
+  if (addExtraSec) {
+    updates.push('extra_time_sec = COALESCE(extra_time_sec, 0) + ?');
+    params.push(addExtraSec);
+  }
+
+  updates.push("updated_at = datetime('now')");
+
+  const updateStmt = db.prepare(`UPDATE exams SET ${updates.join(', ')} WHERE id = ?`);
+  const tx = db.transaction(() => {
+    for (const ex of targetExams) {
+      updateStmt.run(...params, ex.id);
+    }
+  });
+  tx();
+
+  // Broadcast to all active live sessions for each updated exam
+  const changeMsg = _message || buildChangeMessage(mergedSettings);
+  for (const ex of targetExams) {
+    const fresh = db.prepare('SELECT * FROM exams WHERE id = ?').get(ex.id);
+    if (fresh) {
+      broadcastExamSettings(ex.id, {
+        max_hints: fresh.max_hints,
+        hint_mode: fresh.hint_mode || 'lifeline',
+        hints_enabled: !!fresh.hints_enabled,
+        calculator: !!fresh.calculator,
+        mark_for_review: !!fresh.mark_for_review,
+        skip_allowed: !!fresh.skip_allowed,
+        show_palette: !!fresh.show_palette,
+        bilingual: !!fresh.bilingual,
+        extra_time_sec: fresh.extra_time_sec || 0,
+        allow_pause: !!fresh.allow_pause,
+        show_timer: !!fresh.show_timer,
+        allow_section_switch: !!fresh.allow_section_switch,
+        shuffle_questions: !!fresh.shuffle_questions,
+        shuffle_options: !!fresh.shuffle_options,
+        show_explanations_after: !!fresh.show_explanations_after,
+        allow_reattempt: !!fresh.allow_reattempt,
+        is_published: !!fresh.is_published
+      }, changeMsg, req.user.name);
+    }
+  }
+
+  log(req, 'batch_update_settings', 'exams', null, {
+    count: targetExams.length,
+    scope,
+    settings: mergedSettings
+  });
+
+  res.json({
+    ok: true,
+    count: targetExams.length,
+    message: `Updated permissions & settings for ${targetExams.length} papers successfully!`
+  });
+});
+
 router.post('/exams/batch-hints', (req, res) => {
   const {
     scope = 'all',
