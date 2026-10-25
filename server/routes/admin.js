@@ -445,6 +445,20 @@ router.delete('/styles/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/styles/reorder', (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' });
+  const update = db.prepare('UPDATE paper_styles SET sort_order = ? WHERE id = ?');
+  const tx = db.transaction(() => {
+    ids.forEach((id, index) => {
+      update.run(index, id);
+    });
+  });
+  tx();
+  log(req, 'reorder_styles', 'paper_styles', null, { count: ids.length });
+  res.json({ ok: true });
+});
+
 router.post('/students', (req, res) => {
   const { name, email, password, role } = req.body || {};
   if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, password required' });
