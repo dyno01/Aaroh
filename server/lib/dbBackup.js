@@ -122,21 +122,14 @@ async function restoreDatabaseFromB2({ force = false } = {}) {
 
   const dbFile = getDbFile();
   const exists = fs.existsSync(dbFile);
-  const size = exists ? fs.statSync(dbFile).size : 0;
-
-  // On Render wake-up after sleep, the filesystem is empty / dbFile does not exist.
-  // If local file exists with data and force is false, we can use local DB.
-  if (exists && size > 1024 && !force) {
-    console.log(`[DB Restore] Local database already exists (${size} bytes). Using local database.`);
-    return { restored: false, localExists: true, size };
-  }
+  const localSize = exists ? fs.statSync(dbFile).size : 0;
 
   console.log(`[DB Restore] Checking Backblaze B2 for remote database backup '${DB_REMOTE_NAME}'...`);
   try {
     const buffer = await b2.downloadBuffer(DB_REMOTE_NAME);
     if (!buffer || buffer.length === 0) {
-      console.log('[DB Restore] No existing remote database found in Backblaze B2 bucket.');
-      return { restored: false, reason: 'Remote backup not found' };
+      console.log(`[DB Restore] No existing remote database found in Backblaze B2. Keeping local database (${localSize} bytes).`);
+      return { restored: false, reason: 'Remote backup not found', localSize };
     }
 
     const header = buffer.toString('utf8', 0, 15);
