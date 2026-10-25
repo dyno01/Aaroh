@@ -242,3 +242,47 @@ button.kpi, .kpi.click {
   .page-head { flex-direction: column; }
   .exam-foot { gap: 8px; }
 }
+
+/* Textbook Math & Code Formatting */
+.katex {
+  font-size: 1.05em;
+  text-rendering: auto;
+}
+.q-text .katex {
+  font-size: 1.15em;
+}
+.katex-display {
+  margin: 12px 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 0;
+}
+.math-code-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  background: rgba(91, 69, 234, 0.05);
+  border: 1px solid rgba(91, 69, 234, 0.16);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 0.94em;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.opt .math-code-pill {
+  background: rgba(26, 22, 18, 0.04);
+  border: 1px solid rgba(26, 22, 18, 0.1);
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.opt.on .math-code-pill {
+  background: rgba(91, 69, 234, 0.1);
+  border-color: rgba(91, 69, 234, 0.3);
+  color: var(--violet-3);
+}
+.mt-kw { color: #5B45EA; font-weight: 700; }
+.mt-str { color: #0D9488; }
+.mt-num { color: #2563EB; font-weight: 600; }
+.mt-paren { color: #64748B; font-weight: 700; }
+.mt-op { color: #E11D48; font-weight: 700; }
+

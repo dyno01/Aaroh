@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { api } from '../lib/api';
 import { Calculator, Lightbulb, Pause, Flag, Send, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import MathText from '../components/MathText.jsx';
 
 function fmt(sec) {
   const s = Math.max(0, sec | 0);
@@ -174,17 +175,25 @@ export default function ExamLive() {
 
   async function useHint() {
     if (!q || !settings?.hints_enabled) return;
+    const isLadder = settings?.hint_mode === 'per_question';
     const have = hintMap[q.id]?.length || 0;
-    if (have > 0) return; // already unlocked on this question
+    if (isLadder) {
+      if (have >= 3) return;
+    } else {
+      if (have > 0) return; // already unlocked on this question in lifeline mode
+      const total = Number(settings?.max_hints ?? 3);
+      if (hintsUsed >= total) return;
+    }
     try {
       const r = await api(`/api/attempts/${attemptId}/hint`, { method: 'POST', body: { questionId: q.id } });
       setHintMap((m) => ({ ...m, [q.id]: r.hints || [] }));
       if (r.hints_used !== undefined) setHintsUsed(r.hints_used);
       setAnswers((a) => ({
         ...a,
-        [q.id]: { ...(a[q.id] || {}), hintLevel: 1, hintUsed: true }
+        [q.id]: { ...(a[q.id] || {}), hintLevel: (r.hints || []).length, hintUsed: true }
       }));
-      setToast('💡 Hint lifeline unlocked!');
+      const unlockedCount = (r.hints || []).length;
+      setToast(isLadder ? `💡 Hint ${unlockedCount} of 3 unlocked!` : '💡 Hint lifeline unlocked!');
       setTimeout(() => setToast(''), 2500);
     } catch (e) {
       setToast(e.message || 'Could not unlock hint');
@@ -252,6 +261,7 @@ export default function ExamLive() {
     );
   }
 
+  const isLadderMode = settings?.hint_mode === 'per_question';
   const chosen = answers[q.id]?.option;
   const unlocked = hintMap[q.id] || [];
   const hasUnlockedOnQ = unlocked.length > 0;
@@ -278,27 +288,50 @@ export default function ExamLive() {
       <header className="exam-top">
         <div className="brand-mark" style={{ width: 28, height: 28, fontSize: 14, borderRadius: 8 }}>A</div>
         <div className="title">{bundle.exam.title}</div>
-        {settings?.hints_enabled && totalLifelines > 0 && (
-          <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
-            <Lightbulb size={14} color="#F0B429" />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>
-              Lifelines: {remainingLifelines}/{totalLifelines}
-            </span>
-            <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
-              {Array.from({ length: totalLifelines }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    display: 'inline-block',
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: i < remainingLifelines ? '#F0B429' : 'rgba(255,255,255,0.22)'
-                  }}
-                />
-              ))}
-            </span>
-          </div>
+        {settings?.hints_enabled && (
+          isLadderMode ? (
+            <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
+              <Lightbulb size={14} color="#F0B429" />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>
+                Ladder: Q.{idx + 1} ({unlocked.length}/3 hints)
+              </span>
+              <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    style={{
+                      display: 'inline-block',
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: i < unlocked.length ? '#1B9468' : 'rgba(255,255,255,0.22)'
+                    }}
+                  />
+                ))}
+              </span>
+            </div>
+          ) : totalLifelines > 0 && (
+            <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
+              <Lightbulb size={14} color="#F0B429" />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>
+                Lifelines: {remainingLifelines}/{totalLifelines}
+              </span>
+              <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
+                {Array.from({ length: totalLifelines }).map((_, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      display: 'inline-block',
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: i < remainingLifelines ? '#F0B429' : 'rgba(255,255,255,0.22)'
+                    }}
+                  />
+                ))}
+              </span>
+            </div>
+          )
         )}
         {settings?.calculator && (
           <button className="btn btn-sm btn-ghost" onClick={() => setShowCalc((v) => !v)}><Calculator size={14} /> Calc</button>
@@ -328,86 +361,142 @@ export default function ExamLive() {
             </div>
           )}
           <div className="q-num">Question {idx + 1} of {questions.length} · {q.section}{q.topic ? ` · ${q.topic}` : ''} · {q.marks} mark{q.marks === 1 ? '' : 's'}</div>
-          <div className="q-text">{lang === 'hi' && q.q_hi ? q.q_hi : q.q_en}</div>
+          <div className="q-text">
+            <MathText text={lang === 'hi' && q.q_hi ? q.q_hi : q.q_en} />
+          </div>
           <div className="opts">
             {q.options.map((o) => (
               <button key={o.id} className={`opt ${chosen === o.id ? 'on' : ''}`} onClick={() => setOption(o.id)}>
                 <span className="key">{o.id.toUpperCase()}</span>
-                <span>{lang === 'hi' && o.hi ? o.hi : o.en}</span>
+                <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <MathText text={lang === 'hi' && o.hi ? o.hi : o.en} />
+                </span>
               </button>
             ))}
           </div>
 
-          {/* Lifeline Hint Block on the Question */}
-          {settings?.hints_enabled && totalLifelines > 0 && (
-            <div style={{ marginTop: 22 }}>
-              {hasUnlockedOnQ ? (
-                <div className="hint-ladder" style={{ background: '#FFFDF9', border: '1px solid #E8DFD0', borderRadius: 14, padding: 16 }}>
-                  <div className="hint-ladder-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#9A6B00' }}>
-                      <Lightbulb size={16} color="#F0B429" />
-                      <span>Hint Lifeline Active for Q.{idx + 1}</span>
+          {/* Hint Block on the Question */}
+          {settings?.hints_enabled && (
+            isLadderMode ? (
+              /* Per-Question Progressive Ladder Mode */
+              <div style={{ marginTop: 22 }}>
+                <div style={{ background: '#FFFDF9', border: '1px solid #E8DFD0', borderRadius: 14, padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#9A6B00' }}>
+                      <Lightbulb size={18} color="#F0B429" />
+                      <span>Per-Question Hint Ladder (Q.{idx + 1})</span>
                     </div>
-                    <span className="tag green" style={{ fontSize: 11, fontWeight: 700 }}>Unlocked</span>
+                    <span className="tag" style={{ fontSize: 11, fontWeight: 700, background: unlocked.length > 0 ? '#E3F6EE' : '#F5F1E8', color: unlocked.length > 0 ? '#1B9468' : 'var(--muted)' }}>
+                      {unlocked.length === 0 ? '0/3 unlocked' : `${unlocked.length}/3 unlocked`}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>
-                    {unlocked[0]}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                    💡 Hints nudge your concept without revealing the correct option key.
-                  </div>
+
+                  {unlocked.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
+                      Stuck? You can reveal up to 3 progressive hints for this question (Concept Nudge → Rule & Formula → Method).
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                      {unlocked.map((hintText, hIdx) => (
+                        <div key={hIdx} style={{ background: 'white', border: '1px solid #EDE4D4', borderRadius: 10, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9A6B00', marginBottom: 4 }}>
+                            Hint {hIdx + 1} · {hIdx === 0 ? 'Concept Nudge' : hIdx === 1 ? 'Rule & Elimination' : 'Direct Method'}
+                          </div>
+                          <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>
+                            <MathText text={hintText} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {unlocked.length < 3 ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-amber"
+                      onClick={useHint}
+                      style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Lightbulb size={14} /> Reveal Hint {unlocked.length + 1} ({unlocked.length === 0 ? 'Concept nudge' : unlocked.length === 1 ? 'Rule & elimination' : 'Step-by-step approach'})
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#1B9468', fontWeight: 600 }}>
+                      ✓ All 3 hint levels unlocked for this question.
+                    </div>
+                  )}
                 </div>
-              ) : remainingLifelines > 0 ? (
-                <div style={{
-                  background: 'rgba(240, 180, 41, 0.08)',
-                  border: '1.5px dashed rgba(240, 180, 41, 0.55)',
-                  borderRadius: 14,
-                  padding: '14px 18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: 12
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#FCE7B2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Lightbulb size={18} color="#9A6B00" />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#6A4800' }}>
-                        Stuck? Use a Hint Lifeline
+              </div>
+            ) : totalLifelines > 0 ? (
+              /* Lifeline Pool Mode (Default 3 lifelines across paper) */
+              <div style={{ marginTop: 22 }}>
+                {hasUnlockedOnQ ? (
+                  <div className="hint-ladder" style={{ background: '#FFFDF9', border: '1px solid #E8DFD0', borderRadius: 14, padding: 16 }}>
+                    <div className="hint-ladder-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#9A6B00' }}>
+                        <Lightbulb size={16} color="#F0B429" />
+                        <span>Hint Lifeline Active for Q.{idx + 1}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: '#8A6820' }}>
-                        You have <b>{remainingLifelines}</b> of {totalLifelines} hint lifelines left across this paper.
-                      </div>
+                      <span className="tag green" style={{ fontSize: 11, fontWeight: 700 }}>Unlocked</span>
+                    </div>
+                    <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>
+                      <MathText text={unlocked[0]} />
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                      💡 Hints nudge your concept without revealing the correct option key.
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-amber"
-                    onClick={useHint}
-                    style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <Lightbulb size={14} /> Reveal hint on Q.{idx + 1}
-                  </button>
-                </div>
-              ) : (
-                <div style={{
-                  background: 'var(--surface-sunken, #F5F1E8)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 12,
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  color: 'var(--muted)',
-                  fontSize: 12
-                }}>
-                  <Lock size={14} />
-                  <span>All {totalLifelines} hint lifelines have been used. Solve remaining questions independently!</span>
-                </div>
-              )}
-            </div>
+                ) : remainingLifelines > 0 ? (
+                  <div style={{
+                    background: 'rgba(240, 180, 41, 0.08)',
+                    border: '1.5px dashed rgba(240, 180, 41, 0.55)',
+                    borderRadius: 14,
+                    padding: '14px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 12
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#FCE7B2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Lightbulb size={18} color="#9A6B00" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#6A4800' }}>
+                          Stuck? Use a Hint Lifeline
+                        </div>
+                        <div style={{ fontSize: 12, color: '#8A6820' }}>
+                          You have <b>{remainingLifelines}</b> of {totalLifelines} hint lifelines left across this paper.
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-amber"
+                      onClick={useHint}
+                      style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Lightbulb size={14} /> Reveal hint on Q.{idx + 1}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: 'var(--surface-sunken, #F5F1E8)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    color: 'var(--muted)',
+                    fontSize: 12
+                  }}>
+                    <Lock size={14} />
+                    <span>All {totalLifelines} hint lifelines have been used. Solve remaining questions independently!</span>
+                  </div>
+                )}
+              </div>
+            ) : null
           )}
         </div>
         {settings?.show_palette !== false && (
@@ -436,24 +525,44 @@ export default function ExamLive() {
             <Flag size={14} /> {answers[q.id]?.marked ? 'Marked' : 'Mark for review'}
           </button>
         )}
-        {settings?.hints_enabled && totalLifelines > 0 && (
-          <button
-            className="btn btn-line"
-            style={{
-              color: hasUnlockedOnQ ? '#137333' : remainingLifelines > 0 ? '#9A6B00' : 'var(--muted)',
-              borderColor: hasUnlockedOnQ ? '#CEEAD6' : remainingLifelines > 0 ? '#F0B429' : 'var(--border)'
-            }}
-            onClick={useHint}
-            disabled={hasUnlockedOnQ || remainingLifelines <= 0}
-            title={hasUnlockedOnQ ? 'Hint already unlocked on this Q' : remainingLifelines > 0 ? `Use 1 lifeline (${remainingLifelines} left)` : '0 Lifelines left'}
-          >
-            <Lightbulb size={14} />
-            {hasUnlockedOnQ
-              ? 'Hint active on this Q'
-              : remainingLifelines > 0
-                ? `Hint Lifelines (${remainingLifelines} left)`
-                : '0 Lifelines left'}
-          </button>
+        {settings?.hints_enabled && (
+          isLadderMode ? (
+            <button
+              className="btn btn-line"
+              style={{
+                color: unlocked.length > 0 ? '#137333' : '#9A6B00',
+                borderColor: unlocked.length > 0 ? '#CEEAD6' : '#F0B429'
+              }}
+              onClick={useHint}
+              disabled={unlocked.length >= 3}
+              title={unlocked.length < 3 ? `Reveal hint ${unlocked.length + 1} of 3` : 'All 3 hints unlocked'}
+            >
+              <Lightbulb size={14} />
+              {unlocked.length === 0
+                ? 'Reveal Hint (1/3)'
+                : unlocked.length < 3
+                  ? `Reveal Next Hint (${unlocked.length + 1}/3)`
+                  : '3 Hints Unlocked'}
+            </button>
+          ) : totalLifelines > 0 && (
+            <button
+              className="btn btn-line"
+              style={{
+                color: hasUnlockedOnQ ? '#137333' : remainingLifelines > 0 ? '#9A6B00' : 'var(--muted)',
+                borderColor: hasUnlockedOnQ ? '#CEEAD6' : remainingLifelines > 0 ? '#F0B429' : 'var(--border)'
+              }}
+              onClick={useHint}
+              disabled={hasUnlockedOnQ || remainingLifelines <= 0}
+              title={hasUnlockedOnQ ? 'Hint already unlocked on this Q' : remainingLifelines > 0 ? `Use 1 lifeline (${remainingLifelines} left)` : '0 Lifelines left'}
+            >
+              <Lightbulb size={14} />
+              {hasUnlockedOnQ
+                ? 'Hint active on this Q'
+                : remainingLifelines > 0
+                  ? `Hint Lifelines (${remainingLifelines} left)`
+                  : '0 Lifelines left'}
+            </button>
+          )
         )}
         <div style={{ flex: 1 }} />
         <button className="btn btn-violet" onClick={() => (idx === questions.length - 1 ? submit(false) : go(idx + 1))}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast.jsx';
 import { PageHead } from '../../components/ui.jsx';
@@ -9,6 +9,7 @@ export default function AdminExams() {
   const [exams, setExams] = useState([]);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [syncing, setSyncing] = useState(false);
   const [form, setForm] = useState({
     code: '', title: '', exam_family: 'IBPS_SO_IT', type: 'subject', subject: '',
     duration_sec: 600, marks_per_q: 1, negative_per_q: 0.25, max_hints: 3, stage: 'prelims'
@@ -24,6 +25,19 @@ export default function AdminExams() {
   const list = useMemo(() => exams.filter((e) =>
     !q || `${e.title} ${e.code} ${e.subject || ''} ${e.exam_family}`.toLowerCase().includes(q.toLowerCase())
   ), [exams, q]);
+
+  async function syncFolder() {
+    setSyncing(true);
+    try {
+      const r = await api('/api/import/sync-folder', { method: 'POST' });
+      toast.push(`✓ Synced ${r.imported} papers (${r.total_questions} questions) from test/ folder!`);
+      load();
+    } catch (e) {
+      toast.push(`Sync failed: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function create(e) {
     e.preventDefault();
@@ -48,6 +62,16 @@ export default function AdminExams() {
           <Search size={16} color="#8A8378" />
           <input placeholder="Search code or title" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
+        <button
+          className="btn btn-line"
+          onClick={syncFolder}
+          disabled={syncing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          title="Scan and import all papers from test/ directory"
+        >
+          <RefreshCw size={14} className={syncing ? 'spin' : ''} />
+          {syncing ? 'Syncing test/…' : 'Sync test/ folder'}
+        </button>
         <button className="btn btn-amber" onClick={() => setOpen((v) => !v)}>{open ? 'Close' : 'New paper'}</button>
       </PageHead>
 
@@ -83,8 +107,15 @@ export default function AdminExams() {
               <input type="number" value={form.duration_sec} onChange={(e) => setForm({ ...form, duration_sec: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="fld">Hint cap</label>
-              <input type="number" value={form.max_hints} onChange={(e) => setForm({ ...form, max_hints: Number(e.target.value) })} />
+              <label className="fld">Hint Strategy</label>
+              <select value={form.hint_mode || 'lifeline'} onChange={(e) => setForm({ ...form, hint_mode: e.target.value })}>
+                <option value="lifeline">🎯 Lifelines Pool (Total across paper)</option>
+                <option value="per_question">🪜 Per-Question Ladder (On each Q)</option>
+              </select>
+            </div>
+            <div>
+              <label className="fld">Hint Cap / Lifelines</label>
+              <input type="number" min="0" max="10" value={form.max_hints} onChange={(e) => setForm({ ...form, max_hints: Number(e.target.value) })} />
             </div>
           </div>
           <button className="btn btn-violet" style={{ marginTop: 14 }} type="submit">Create paper</button>
@@ -93,7 +124,7 @@ export default function AdminExams() {
 
       <div className="card" style={{ marginTop: 16, overflowX: 'auto' }}>
         <table className="table">
-          <thead><tr><th>Paper</th><th>Type</th><th>Q</th><th>Hints</th><th>Live</th><th>Sat</th><th></th></tr></thead>
+          <thead><tr><th>Paper</th><th>Type</th><th>Q</th><th>Hint Mode</th><th>Live</th><th>Sat</th><th></th></tr></thead>
           <tbody>
             {list.map((e) => (
               <tr key={e.id}>
@@ -103,7 +134,11 @@ export default function AdminExams() {
                 </td>
                 <td><span className={`tag ${e.type === 'high_influence' ? 'gold' : e.type === 'full' ? 'ink' : ''}`}>{e.type}</span></td>
                 <td>{e.question_count}</td>
-                <td>{e.max_hints}</td>
+                <td>
+                  <span className={`tag ${e.hint_mode === 'per_question' ? 'ink' : 'green'}`} style={{ fontSize: 11 }}>
+                    {e.hint_mode === 'per_question' ? `🪜 ${e.max_hints}/Q` : `🎯 ${e.max_hints} Lifelines`}
+                  </span>
+                </td>
                 <td>{e.live_count ? <><span className="live-dot" />{e.live_count}</> : '—'}</td>
                 <td>{e.attempt_count}</td>
                 <td>

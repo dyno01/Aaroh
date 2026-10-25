@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast.jsx';
 import { Loading, PageHead } from '../../components/ui.jsx';
+import MathText from '../../components/MathText.jsx';
 
 function Toggle({ on, set }) {
   return <button type="button" className={`toggle ${on ? 'on' : ''}`} onClick={() => set(!on)} aria-pressed={on}><i /></button>;
@@ -90,18 +91,59 @@ export default function AdminExamEdit() {
         <div className="card">
           <h3>Live permissions</h3>
           <p className="lead">Flip a switch or drag a cap. Students already in the hall receive it instantly — no reload, no new attempt.</p>
+          <div style={{ margin: '14px 0 16px', padding: 14, background: '#FAF7F2', borderRadius: 14, border: '1px solid var(--border)' }}>
+            <label className="fld" style={{ fontWeight: 700, marginBottom: 8, display: 'block' }}>Hint Strategy Mode (Admin Decision)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+              <button
+                type="button"
+                className={`btn ${exam.hint_mode !== 'per_question' ? 'btn-ink' : 'btn-line'}`}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '12px 14px', height: 'auto', borderRadius: 12 }}
+                onClick={() => patch({ hint_mode: 'lifeline' }, 'Switched to Lifeline pool')}
+              >
+                <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <span>🎯 3 Lifelines Pool</span>
+                  {exam.hint_mode !== 'per_question' && <span className="tag green" style={{ fontSize: 10 }}>Active</span>}
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontWeight: 400, lineHeight: 1.4 }}>
+                  Student has a total pool of {exam.max_hints || 3} hints across the whole paper — use whenever on whichever questions needed.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={`btn ${exam.hint_mode === 'per_question' ? 'btn-ink' : 'btn-line'}`}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '12px 14px', height: 'auto', borderRadius: 12 }}
+                onClick={() => patch({ hint_mode: 'per_question' }, 'Switched to Per-Question ladder')}
+              >
+                <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <span>🪜 Per-Question Ladder</span>
+                  {exam.hint_mode === 'per_question' && <span className="tag green" style={{ fontSize: 10 }}>Active</span>}
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontWeight: 400, lineHeight: 1.4 }}>
+                  Hints are available on every question individually (Hint 1, 2, 3 step-by-step unlock).
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div className="settings-grid" style={{ marginTop: 12 }}>
             <div className="hint-cap">
               <div style={{ flex: 1 }}>
-                <label className="fld">Hint Lifelines Pool · {exam.max_hints} total per student</label>
+                <label className="fld">
+                  {exam.hint_mode === 'per_question'
+                    ? `Per-Question Hint Cap · up to ${exam.max_hints} hints per Q`
+                    : `Lifelines Budget · ${exam.max_hints} total lifelines across paper`}
+                </label>
                 <input type="range" min="0" max="10" value={exam.max_hints} onChange={(e) => patch({ max_hints: Number(e.target.value) })} />
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-sm btn-amber" onClick={() => patch({ max_hints: (exam.max_hints || 0) + 1 }, 'Coach added +1 lifeline')}>+1 lifeline</button>
-                  <button className="btn btn-sm btn-line" onClick={() => patch({ max_hints: 3, hints_enabled: true }, 'Set to 3 lifelines')}>Set 3 (Standard)</button>
+                  <button className="btn btn-sm btn-amber" onClick={() => patch({ max_hints: (exam.max_hints || 0) + 1 }, 'Coach added +1 hint')}>+1 hint</button>
+                  <button className="btn btn-sm btn-line" onClick={() => patch({ max_hints: 3, hints_enabled: true }, 'Set to 3 hints')}>Set 3 (Standard)</button>
                   <button className="btn btn-sm btn-line" onClick={() => patch({ max_hints: 0, hints_enabled: false }, 'Hints frozen')}>Freeze hints</button>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                  Students can use these lifelines on whichever questions they need help with.
+                  {exam.hint_mode === 'per_question'
+                    ? 'Limits how many hint ladder levels can be opened on each question.'
+                    : 'Total number of lifelines the student can use across all questions.'}
                 </div>
               </div>
             </div>
@@ -187,7 +229,7 @@ export default function AdminExamEdit() {
                 <div style={{ display: 'flex', gap: 12 }}>
                   <span className="tag">Q{i + 1}</span>
                   <div style={{ flex: 1 }}>
-                    <div className="q">{q.q_en}</div>
+                    <div className="q"><MathText text={q.q_en} /></div>
                     <div className="meta-chips">
                       {q.topic && <span className="tag">{q.topic}</span>}
                       <span className="tag green">ans {q.correct.toUpperCase()}</span>

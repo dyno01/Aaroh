@@ -264,6 +264,21 @@ router.post('/json', (req, res) => {
   }
 });
 
+router.post('/sync-folder', (req, res) => {
+  try {
+    const { importTestFolder } = require('../lib/importPack');
+    const results = importTestFolder(db);
+    res.json({
+      ok: true,
+      imported: results.length,
+      total_questions: results.reduce((s, r) => s + r.count, 0),
+      papers: results
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 function readUpload(req) {
   if (req.body?.rows) return { rows: req.body.rows, kind: 'json' };
   if (!req.file) throw new Error('Upload a CSV or JSON file');

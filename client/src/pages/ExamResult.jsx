@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Check, X, Minus, Clock, Lightbulb, UserCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth.jsx';
+import MathText from '../components/MathText.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -173,7 +174,7 @@ export default function ExamResult() {
                 <span className="tag" style={{ marginLeft: 'auto' }}><Clock size={12} /> {item.timeSpent}s</span>
               )}
             </header>
-            <h3 className="rev-q">{item.q_en}</h3>
+            <h3 className="rev-q"><MathText text={item.q_en} /></h3>
             <div className="rev-opts">
               {item.options.map((o) => {
                 const isCorrect = o.id === item.correct;
@@ -181,7 +182,7 @@ export default function ExamResult() {
                 return (
                   <div key={o.id} className={`rev-opt ${isCorrect ? 'is-correct' : ''} ${isChosen && !isCorrect ? 'is-wrong' : ''}`}>
                     <span className="key">{o.id.toUpperCase()}</span>
-                    <span className="txt">{o.en}</span>
+                    <span className="txt"><MathText text={o.en} /></span>
                     {isCorrect && <span className="flag ok">Correct answer</span>}
                     {isChosen && !isCorrect && <span className="flag no">Your pick</span>}
                     {isChosen && isCorrect && <span className="flag ok">You got this</span>}
@@ -191,14 +192,14 @@ export default function ExamResult() {
             </div>
             <div className="why-box">
               <div className="why-kicker">The rule · {item.topic || item.section}</div>
-              <p className="why-rule">{item.rule || item.explanation}</p>
+              <p className="why-rule"><MathText text={item.rule || item.explanation} /></p>
               <div className="why-kicker" style={{ marginTop: 12 }}>Why {item.correct_label} is right</div>
               <p>
-                <b>{item.correct_label}. {item.correct_text}</b>
-                {item.body ? <> — {item.body}</> : null}
+                <b>{item.correct_label}. <MathText text={item.correct_text} inline /></b>
+                {item.body ? <> — <MathText text={item.body} inline /></> : null}
               </p>
               {item.verdict === 'wrong' && item.chosen_label && (
-                <p>You chose <b>{item.chosen_label}. {item.chosen_text}</b>. That option does not match the rule.</p>
+                <p>You chose <b>{item.chosen_label}. <MathText text={item.chosen_text} inline /></b>. That option does not match the rule.</p>
               )}
               {item.verdict === 'skipped' && <p>You left this blank, so it scored 0. The key still stands.</p>}
               {item.others?.length > 0 && (
@@ -207,13 +208,13 @@ export default function ExamResult() {
                   {item.others.map((o) => (
                     <div key={o.id} className={`why-else ${item.chosen === o.id ? 'picked' : ''}`}>
                       <span className="key">{o.label}</span>
-                      <span><b>{o.text}</b> — {o.note}</span>
+                      <span><b><MathText text={o.text} inline /></b> — <MathText text={o.note} inline /></span>
                     </div>
                   ))}
                 </div>
               )}
               {item.remember && (
-                <div className="why-remember"><b>Remember.</b> {item.remember}</div>
+                <div className="why-remember"><b>Remember.</b> <MathText text={item.remember} inline /></div>
               )}
               <button
                 className="btn btn-sm btn-line"

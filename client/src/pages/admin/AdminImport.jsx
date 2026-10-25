@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, RefreshCw, FolderSync } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast.jsx';
 import { PageHead } from '../../components/ui.jsx';
@@ -25,6 +25,7 @@ export default function AdminImport() {
   const [jsonText, setJsonText] = useState('');
   const [summary, setSummary] = useState(null);
   const [hot, setHot] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [meta, setMeta] = useState(emptyMeta);
   const [catalog, setCatalog] = useState({ families: [], types: [] });
   const toast = useToast();
@@ -32,6 +33,18 @@ export default function AdminImport() {
   useEffect(() => {
     api('/api/exams/catalog').then(setCatalog).catch(() => {});
   }, []);
+
+  async function syncFolder() {
+    setSyncing(true);
+    try {
+      const r = await api('/api/import/sync-folder', { method: 'POST' });
+      toast.push(`✓ Synced ${r.imported} papers (${r.total_questions} questions) from test/ folder!`);
+    } catch (e) {
+      toast.push(`Sync failed: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function fillMeta(papers) {
     const p = papers?.[0];
@@ -95,9 +108,31 @@ export default function AdminImport() {
         lead="Drop a file. We fill the paper details from the template — change anything before you commit. A new exam_family or exam_type becomes a Tests button."
       />
 
+      <div className="card" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, background: 'linear-gradient(135deg, rgba(91, 69, 234, 0.05), rgba(240, 180, 41, 0.05))', border: '1.5px solid var(--violet-soft-2)' }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink)' }}>
+            <FolderSync size={18} color="var(--violet)" />
+            <span>Sync Papers from test/ Folder</span>
+          </div>
+          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 13, lineHeight: 1.45 }}>
+            Whenever you add or update CSV files in the <code>test/</code> directory (e.g. debugging, full, subject), click here to immediately auto-import all new papers without restarting the server.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-violet"
+          onClick={syncFolder}
+          disabled={syncing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '8px 16px' }}
+        >
+          <RefreshCw size={14} className={syncing ? 'spin' : ''} />
+          {syncing ? 'Scanning & Syncing…' : 'Sync test/ Folder Now'}
+        </button>
+      </div>
+
       <div
         className={`card drop ${hot ? 'hot' : ''}`}
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 12 }}
         onDragOver={(e) => { e.preventDefault(); setHot(true); }}
         onDragLeave={() => setHot(false)}
         onDrop={(e) => { e.preventDefault(); setHot(false); takeFile(e.dataTransfer.files?.[0]); }}

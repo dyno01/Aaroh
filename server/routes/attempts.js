@@ -8,6 +8,7 @@ const router = express.Router();
 function examSettings(exam) {
   return {
     max_hints: exam.max_hints,
+    hint_mode: exam.hint_mode || 'lifeline',
     hints_enabled: !!exam.hints_enabled,
     calculator: !!exam.calculator,
     mark_for_review: !!exam.mark_for_review,
@@ -30,8 +31,16 @@ function stripCorrect(q, shuffleOptions, exam, answers) {
     options = [...options].sort(() => Math.random() - 0.5);
   }
   const allHints = parseHints(q).length ? parseHints(q) : buildHints(q);
-  const max = maxHintLevels(exam, allHints);
-  const unlocked = Math.min(max, Number(answers?.[q.id]?.hintLevel || 0));
+  const hintMode = exam?.hint_mode || 'lifeline';
+  let max = 1;
+  let unlocked = 0;
+  if (hintMode === 'per_question') {
+    max = maxHintLevels(exam, allHints);
+    unlocked = Math.min(max, Number(answers?.[q.id]?.hintLevel || 0));
+  } else {
+    max = allHints.length > 0 ? 1 : 0;
+    unlocked = Number(answers?.[q.id]?.hintLevel || 0) > 0 ? 1 : 0;
+  }
   return {
     id: q.id,
     section: q.section,
@@ -177,7 +186,9 @@ function payloadForAttempt(attempt, res, extra = {}) {
       exam_family: exam.exam_family,
       duration_sec: exam.duration_sec,
       marks_per_q: exam.marks_per_q,
-      negative_per_q: exam.negative_per_q
+      negative_per_q: exam.negative_per_q,
+      hint_mode: exam.hint_mode || 'lifeline',
+      max_hints: exam.max_hints
     },
     settings: live,
     sections,
@@ -206,8 +217,48 @@ router.post('/:id/hint', auth(), (req, res) => {
   if (!q) return res.status(404).json({ error: 'Question not found' });
   if (!exam.hints_enabled) return res.status(403).json({ error: 'Hints are turned off for this paper' });
 
+  const hintMode = exam.hint_mode || 'lifeline';
   const allHints = parseHints(q).length ? parseHints(q) : buildHints(q);
   const answers = JSON.parse(attempt.answers_json || '{}');
+
+  // MODE A: PER-QUESTION HINT LADDER (Hints available on every question up to cap)
+  if (hintMode === 'per_question') {
+    const max = maxHintLevels(exam, allHints);
+    const unlocked = Math.min(max, Number(answers[questionId]?.hintLevel || 0));
+    if (peek) {
+      return res.json({
+        hints: allHints.slice(0, unlocked),
+        unlocked,
+        max,
+        hints_used: attempt.hints_used || 0,
+        hint_mode: 'per_question'
+      });
+    }
+    if (max <= 0) return res.status(403).json({ error: 'No hints available on this question' });
+    if (unlocked >= max) {
+      return res.json({
+        hints: allHints.slice(0, unlocked),
+        unlocked,
+        max,
+        done: true,
+        hints_used: attempt.hints_used || 0,
+        hint_mode: 'per_question'
+      });
+    }
+    const next = unlocked + 1;
+    answers[questionId] = { ...(answers[questionId] || {}), hintLevel: next, hintUsed: true };
+    db.prepare('UPDATE attempts SET hints_used = hints_used + 1, answers_json = ? WHERE id = ?').run(JSON.stringify(answers), attempt.id);
+    return res.json({
+      hints: allHints.slice(0, next),
+      unlocked: next,
+      max,
+      hint: allHints[next - 1],
+      hints_used: (attempt.hints_used || 0) + 1,
+      hint_mode: 'per_question'
+    });
+  }
+
+  // MODE B: LIFELINE POOL (e.g. 3 lifelines across the entire test)
   const alreadyUnlocked = Number(answers[questionId]?.hintLevel || 0) > 0;
   const totalLifelines = Number.isFinite(Number(exam.max_hints)) ? Number(exam.max_hints) : 3;
   const currentHintsUsed = attempt.hints_used || 0;
@@ -221,7 +272,8 @@ router.post('/:id/hint', auth(), (req, res) => {
       max: 1,
       hints_used: currentHintsUsed,
       total_lifelines: totalLifelines,
-      remaining_lifelines: remainingLifelines
+      remaining_lifelines: remainingLifelines,
+      hint_mode: 'lifeline'
     });
   }
 
@@ -235,7 +287,8 @@ router.post('/:id/hint', auth(), (req, res) => {
       hints_used: currentHintsUsed,
       total_lifelines: totalLifelines,
       remaining_lifelines: remainingLifelines,
-      already: true
+      already: true,
+      hint_mode: 'lifeline'
     });
   }
 
@@ -257,7 +310,8 @@ router.post('/:id/hint', auth(), (req, res) => {
     hint: allHints[0],
     hints_used: nextUsed,
     total_lifelines: totalLifelines,
-    remaining_lifelines: Math.max(0, totalLifelines - nextUsed)
+    remaining_lifelines: Math.max(0, totalLifelines - nextUsed),
+    hint_mode: 'lifeline'
   });
 });
 

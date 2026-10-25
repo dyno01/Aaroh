@@ -15,7 +15,7 @@ function log(req, action, entity, entity_id, payload) {
 }
 
 const SETTINGS_KEYS = [
-  'max_hints', 'hints_enabled', 'calculator', 'mark_for_review', 'skip_allowed',
+  'max_hints', 'hint_mode', 'hints_enabled', 'calculator', 'mark_for_review', 'skip_allowed',
   'show_palette', 'bilingual', 'extra_time_sec', 'allow_pause', 'show_timer',
   'allow_section_switch', 'show_explanations_after', 'allow_reattempt',
   'shuffle_questions', 'shuffle_options', 'max_attempts', 'passing_pct',
@@ -107,6 +107,7 @@ router.patch('/exams/:id', (req, res) => {
   log(req, 'update_exam', 'exam', exam.id, b);
   const liveSettings = {
     max_hints: fresh.max_hints,
+    hint_mode: fresh.hint_mode || 'lifeline',
     hints_enabled: !!fresh.hints_enabled,
     calculator: !!fresh.calculator,
     mark_for_review: !!fresh.mark_for_review,
@@ -127,6 +128,7 @@ router.patch('/exams/:id', (req, res) => {
 
 function buildChangeMessage(b) {
   const bits = [];
+  if (b.hint_mode) bits.push(b.hint_mode === 'per_question' ? 'hint mode changed to per-question ladder' : 'hint mode changed to lifeline pool');
   if (b.max_hints !== undefined) bits.push(`hints cap is now ${b.max_hints}`);
   if (b.hints_enabled === 0 || b.hints_enabled === false) bits.push('hints were turned off');
   if (b.hints_enabled === 1 || b.hints_enabled === true) bits.push('hints were turned on');

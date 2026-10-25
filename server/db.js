@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS exams (
   passing_pct REAL DEFAULT 0,
   instructions TEXT,
   coming_soon INTEGER DEFAULT 0,
+  hint_mode TEXT DEFAULT 'lifeline',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -133,6 +134,13 @@ try {
   if (!cols.includes('hints_json')) db.exec('ALTER TABLE questions ADD COLUMN hints_json TEXT');
 } catch (e) {
   console.error('hints_json migrate', e);
+}
+
+try {
+  const ecols = db.prepare('PRAGMA table_info(exams)').all().map((c) => c.name);
+  if (!ecols.includes('hint_mode')) db.exec("ALTER TABLE exams ADD COLUMN hint_mode TEXT DEFAULT 'lifeline'");
+} catch (e) {
+  console.error('hint_mode migrate', e);
 }
 
 try {
@@ -232,12 +240,9 @@ try {
 }
 
 try {
-  const examCount = db.prepare('SELECT COUNT(*) AS c FROM exams').get().c;
-  if (examCount === 0) {
-    console.log('Exams table is empty. Auto-importing test pack from test/ folder...');
-    const { importTestFolder } = require('./lib/importPack');
-    importTestFolder(db);
-  }
+  console.log('Syncing test pack from test/ folder...');
+  const { importTestFolder } = require('./lib/importPack');
+  importTestFolder(db);
 } catch (e) {
   console.error('autoImportTests', e);
 }
