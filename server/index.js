@@ -7,6 +7,22 @@ const { Server } = require('socket.io');
 require('./db');
 const { bind } = require('./realtime');
 
+// Restore papers from Backblaze B2 cloud storage on startup
+(async () => {
+  try {
+    const { restorePapersFromB2 } = require('./lib/b2');
+    const { importTestFolder } = require('./lib/importPack');
+    const db = require('./db');
+    const res = await restorePapersFromB2();
+    if (res && res.restored > 0) {
+      console.log(`[Startup] Backblaze B2 restored ${res.restored} cloud papers. Re-syncing database...`);
+      importTestFolder(db);
+    }
+  } catch (err) {
+    console.warn('[Startup] Backblaze B2 cloud restore note:', err.message);
+  }
+})();
+
 const app = express();
 app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));

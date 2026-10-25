@@ -152,12 +152,22 @@ function persistPaperToDisk(meta, rows) {
     fs.writeFileSync(filePath, csvContent, 'utf8');
     const relPath = path.relative(path.join(__dirname, '../..'), filePath);
     console.log(`[Import] Saved paper ${meta.code} to ${relPath}`);
+
+    // Asynchronously push to Backblaze B2 cloud storage so it survives redeployment
+    try {
+      const b2 = require('../lib/b2');
+      b2.uploadPaperCsv(sub, `${safeCode}.csv`, csvContent).catch((b2Err) => {
+        console.warn(`[Backblaze B2] Background upload warning for ${safeCode}:`, b2Err.message);
+      });
+    } catch { /* ignore */ }
+
     return relPath;
   } catch (err) {
     console.error(`[Import] Failed to save paper to disk:`, err);
     return null;
   }
 }
+
 
 function upsertExam(meta) {
   const code = meta.code || meta.exam_code;

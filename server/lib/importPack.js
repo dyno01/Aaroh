@@ -202,9 +202,34 @@ function findCsvFiles(dir, fileList = []) {
   return fileList;
 }
 
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  for (const item of fs.readdirSync(src)) {
+    const s = path.join(src, item);
+    const d = path.join(dest, item);
+    if (fs.statSync(s).isDirectory()) {
+      copyDirRecursive(s, d);
+    } else if (!fs.existsSync(d)) {
+      fs.copyFileSync(s, d);
+    }
+  }
+}
+
 function importTestFolder(dbOverride) {
   const db = getDb(dbOverride);
-  const testDir = path.join(__dirname, '../../test');
+  const defaultRepoDir = path.join(__dirname, '../../test');
+  const testDir = process.env.TEST_DIR || defaultRepoDir;
+
+  // If using a custom persistent disk (e.g. /data/test), seed repo files into it once
+  if (testDir !== defaultRepoDir && fs.existsSync(defaultRepoDir)) {
+    try {
+      copyDirRecursive(defaultRepoDir, testDir);
+    } catch (err) {
+      console.warn('Could not seed default tests to custom TEST_DIR:', err.message);
+    }
+  }
+
   const files = findCsvFiles(testDir);
   console.log(`Found ${files.length} test CSV files in ${testDir}`);
   const results = [];
@@ -220,5 +245,6 @@ function importTestFolder(dbOverride) {
     results.reduce((s, r) => s + r.count, 0));
   return results;
 }
+
 
 module.exports = { importTestFolder, ingestCsvFile, findCsvFiles };

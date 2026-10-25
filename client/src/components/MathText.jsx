@@ -84,12 +84,12 @@ export default function MathText({ text, className = '', style = {}, inline = fa
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           fontSize: '0.94em',
           letterSpacing: '0.01em',
-          background: 'rgba(91, 69, 234, 0.05)',
-          padding: '3px 8px',
-          borderRadius: 6,
-          border: '1px solid rgba(91, 69, 234, 0.15)',
-          display: inline ? 'inline-block' : 'inline-block',
-          color: '#1A1612',
+          background: 'transparent',
+          padding: '0 2px',
+          borderRadius: 4,
+          border: 'none',
+          display: inline ? 'inline' : 'inline-block',
+          color: 'inherit',
           wordBreak: 'break-word',
           ...style
         }}

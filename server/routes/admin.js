@@ -5,6 +5,7 @@ const { auth, admin } = require('../middleware/auth');
 const { broadcastExamSettings, broadcastAttemptPatch } = require('../realtime');
 const { packHints, buildHints } = require('../lib/hints');
 const { catalog, upsertStyle, listStyles, slugFamily, slugType, prettySlug } = require('../lib/styles');
+const { saveExamToDisk, examToCsvString, syncAllExamsToDisk } = require('../lib/paperSync');
 
 const router = express.Router();
 router.use(auth(), admin);
@@ -85,6 +86,17 @@ router.get('/exams/:id', (req, res) => {
   res.json({ exam, questions, sections });
 });
 
+router.get('/exams/:id/export.csv', (req, res) => {
+  const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
+  if (!exam) return res.status(404).send('Not found');
+  const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_index, id').all(exam.id);
+  const csv = examToCsvString(exam, questions);
+  const safeCode = (exam.code || 'PAPER').replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeCode}.csv"`);
+  res.send(csv);
+});
+
 router.patch('/exams/:id', (req, res) => {
   const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
   if (!exam) return res.status(404).json({ error: 'Not found' });
@@ -139,6 +151,88 @@ function buildChangeMessage(b) {
   if (b.mark_for_review !== undefined) bits.push(b.mark_for_review ? 'mark-for-review on' : 'mark-for-review off');
   return bits.length ? `Live update: ${bits.join(' · ')}` : 'Exam settings updated — applied instantly';
 }
+
+router.post('/exams/batch-hints', (req, res) => {
+  const {
+    scope = 'all',
+    exam_family,
+    exam_ids,
+    max_hints,
+    hint_mode,
+    hints_enabled
+  } = req.body || {};
+
+  let targetExams = [];
+  if (scope === 'all') {
+    targetExams = db.prepare('SELECT id, title, exam_family FROM exams').all();
+  } else if (scope === 'family' && exam_family) {
+    targetExams = db.prepare('SELECT id, title, exam_family FROM exams WHERE exam_family = ?').all(exam_family);
+  } else if (scope === 'selected' && Array.isArray(exam_ids) && exam_ids.length) {
+    const ph = exam_ids.map(() => '?').join(',');
+    targetExams = db.prepare(`SELECT id, title, exam_family FROM exams WHERE id IN (${ph})`).all(...exam_ids);
+  } else {
+    targetExams = db.prepare('SELECT id, title, exam_family FROM exams').all();
+  }
+
+  if (!targetExams.length) {
+    return res.status(400).json({ error: 'No matching papers found' });
+  }
+
+  const updates = [];
+  const params = [];
+  if (max_hints !== undefined) {
+    updates.push('max_hints = ?');
+    params.push(Number(max_hints));
+  }
+  if (hint_mode !== undefined) {
+    updates.push('hint_mode = ?');
+    params.push(String(hint_mode));
+  }
+  if (hints_enabled !== undefined) {
+    updates.push('hints_enabled = ?');
+    params.push(hints_enabled ? 1 : 0);
+  }
+
+  if (!updates.length) {
+    return res.status(400).json({ error: 'No hint settings provided to update' });
+  }
+
+  updates.push("updated_at = datetime('now')");
+
+  const updateStmt = db.prepare(`UPDATE exams SET ${updates.join(', ')} WHERE id = ?`);
+  const tx = db.transaction(() => {
+    for (const ex of targetExams) {
+      updateStmt.run(...params, ex.id);
+    }
+  });
+  tx();
+
+  // Broadcast to all active live sessions for each updated exam
+  for (const ex of targetExams) {
+    const fresh = db.prepare('SELECT * FROM exams WHERE id = ?').get(ex.id);
+    if (fresh) {
+      broadcastExamSettings(ex.id, {
+        max_hints: fresh.max_hints,
+        hint_mode: fresh.hint_mode || 'lifeline',
+        hints_enabled: !!fresh.hints_enabled
+      }, `Coach updated hint policy to ${fresh.max_hints} (${fresh.hint_mode}) across papers`, req.user.name);
+    }
+  }
+
+  log(req, 'batch_update_hints', 'exams', null, {
+    count: targetExams.length,
+    scope,
+    max_hints,
+    hint_mode,
+    hints_enabled
+  });
+
+  res.json({
+    ok: true,
+    count: targetExams.length,
+    message: `Updated hint policy for ${targetExams.length} papers successfully!`
+  });
+});
 
 router.delete('/exams/:id', (req, res) => {
   db.prepare('DELETE FROM exams WHERE id = ?').run(req.params.id);
@@ -469,6 +563,46 @@ router.post('/students', (req, res) => {
     res.json({ id: info.lastInsertRowid });
   } catch {
     res.status(409).json({ error: 'Email already exists' });
+  }
+});
+
+const b2 = require('../lib/b2');
+
+router.get('/b2/status', async (_req, res) => {
+  try {
+    const configured = b2.isB2Configured();
+    if (!configured) return res.json({ configured: false });
+    const files = await b2.listFiles('papers/');
+    res.json({
+      configured: true,
+      bucket: b2.B2_BUCKET_NAME,
+      filesCount: files.length,
+      files: files.slice(0, 50).map((f) => ({ name: f.fileName, size: f.contentLength, uploaded: f.uploadTimestamp }))
+    });
+  } catch (err) {
+    res.status(500).json({ configured: false, error: err.message });
+  }
+});
+
+router.post('/b2/sync-to-cloud', async (req, res) => {
+  try {
+    const result = await b2.syncLocalPapersToB2();
+    log(req, 'b2_sync_to_cloud', 'b2', null, result);
+    res.json({ ok: true, ...result, message: `Uploaded ${result.uploaded} papers to Backblaze B2!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/b2/restore-from-cloud', async (req, res) => {
+  try {
+    const result = await b2.restorePapersFromB2();
+    const { importTestFolder } = require('../lib/importPack');
+    const imported = importTestFolder(db);
+    log(req, 'b2_restore_from_cloud', 'b2', null, { restored: result.restored, imported: imported.length });
+    res.json({ ok: true, restored: result.restored, imported: imported.length, message: `Restored ${result.restored} papers from Backblaze B2 and synced database!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

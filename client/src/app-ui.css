@@ -173,19 +173,21 @@ button.kpi, .kpi.click {
 .rev-q { margin: 0 0 12px; font-size: 17px; letter-spacing: -0.02em; line-height: 1.4; }
 .rev-opts { display: flex; flex-direction: column; gap: 8px; }
 .rev-opt {
-  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 14px;
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px;
   background: var(--cream); border: 1.5px solid transparent; font-size: 14px;
 }
 .rev-opt .key {
-  width: 26px; height: 26px; border-radius: 8px; background: #fff; display: grid; place-items: center;
-  font-weight: 700; font-size: 12px; flex: none;
+  width: 28px; height: 28px; border-radius: 8px; background: #fff; display: grid; place-items: center;
+  font-weight: 700; font-size: 12px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
-.rev-opt .txt { flex: 1; line-height: 1.45; }
-.rev-opt .flag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; }
-.rev-opt .flag.ok { background: var(--green-soft); color: var(--green); }
+.rev-opt .txt { flex: 1; line-height: 1.45; word-break: break-word; }
+.rev-opt .flag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; flex: none; }
+.rev-opt .flag.ok { background: #0E6245; color: #fff; }
 .rev-opt .flag.no { background: var(--red-soft); color: #9f1c1c; }
-.rev-opt.is-correct { background: #E3F6EE; border-color: #b7e4d0; }
+.rev-opt.is-correct { background: #EBF8F2; border-color: #8CE0B7; }
+.rev-opt.is-correct .key { background: #0E6245; color: #fff; }
 .rev-opt.is-wrong { background: #FDECEC; border-color: #f3c0c0; }
+.rev-opt.is-wrong .key { background: #9f1c1c; color: #fff; }
 .why-box {
   margin-top: 14px; background: var(--violet-soft); border-radius: 16px; padding: 14px 16px;
 }
@@ -209,7 +211,7 @@ button.kpi, .kpi.click {
   margin-top: 10px; background: #FFF8E6; border-radius: 12px; padding: 10px 12px;
   font-size: 14px; color: var(--ink); line-height: 1.5;
 }
-.result-keep { border: 1.5px solid var(--violet-soft-2); background: linear-gradient(180deg, #F7F4FF, var(--paper)); }
+.result-keep { border: 1px solid var(--border); background: #fff; border-radius: 16px; }
 .hint-used { margin-top: 10px; font-size: 12px; color: #9A6B00; display: flex; align-items: center; gap: 6px; }
 
 .home-cta .btn { margin-top: 6px; width: fit-content; }
