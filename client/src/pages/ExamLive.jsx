@@ -22,6 +22,7 @@ export default function ExamLive() {
   const [settings, setSettings] = useState(null);
   const [remaining, setRemaining] = useState(0);
   const [hintMap, setHintMap] = useState({});
+  const [hintsUsed, setHintsUsed] = useState(0);
   const [toast, setToast] = useState('');
   const [lang, setLang] = useState('en');
   const [showCalc, setShowCalc] = useState(false);
@@ -47,6 +48,7 @@ export default function ExamLive() {
     setAnswers(bundle.attempt.answers || {});
     setSettings(bundle.settings);
     setRemaining(bundle.attempt.remaining);
+    setHintsUsed(bundle.attempt.hints_used || 0);
     const startIdx = bundle.questions.findIndex((q) => q.id === bundle.attempt.current_qid);
     setIdx(startIdx >= 0 ? startIdx : 0);
     const m = {};
@@ -173,17 +175,20 @@ export default function ExamLive() {
   async function useHint() {
     if (!q || !settings?.hints_enabled) return;
     const have = hintMap[q.id]?.length || 0;
-    if (have >= (q.hint_count || 0)) return;
+    if (have > 0) return; // already unlocked on this question
     try {
       const r = await api(`/api/attempts/${attemptId}/hint`, { method: 'POST', body: { questionId: q.id } });
       setHintMap((m) => ({ ...m, [q.id]: r.hints || [] }));
+      if (r.hints_used !== undefined) setHintsUsed(r.hints_used);
       setAnswers((a) => ({
         ...a,
-        [q.id]: { ...(a[q.id] || {}), hintLevel: r.unlocked, hintUsed: true }
+        [q.id]: { ...(a[q.id] || {}), hintLevel: 1, hintUsed: true }
       }));
+      setToast('💡 Hint lifeline unlocked!');
+      setTimeout(() => setToast(''), 2500);
     } catch (e) {
-      setToast(e.message);
-      setTimeout(() => setToast(''), 3000);
+      setToast(e.message || 'Could not unlock hint');
+      setTimeout(() => setToast(''), 3500);
     }
   }
 
@@ -249,8 +254,14 @@ export default function ExamLive() {
 
   const chosen = answers[q.id]?.option;
   const unlocked = hintMap[q.id] || [];
-  const liveCap = !settings?.hints_enabled ? 0 : Math.min(3, Number(settings.max_hints) > 0 && Number(settings.max_hints) < 4 ? Number(settings.max_hints) : 3);
-  const maxHints = Math.min(q.hint_count || 0, liveCap);
+  const hasUnlockedOnQ = unlocked.length > 0;
+  const totalLifelines = !settings?.hints_enabled
+    ? 0
+    : Number.isFinite(Number(settings?.max_hints)) && Number(settings?.max_hints) >= 0
+      ? Number(settings?.max_hints)
+      : (bundle?.exam?.max_hints || 3);
+  const remainingLifelines = Math.max(0, totalLifelines - hintsUsed);
+
   const statusOf = (qq) => {
     const a = answers[qq.id] || {};
     const st = [];
@@ -267,8 +278,27 @@ export default function ExamLive() {
       <header className="exam-top">
         <div className="brand-mark" style={{ width: 28, height: 28, fontSize: 14, borderRadius: 8 }}>A</div>
         <div className="title">{bundle.exam.title}</div>
-        {settings?.hints_enabled && maxHints > 0 && (
-          <div className="hint-pill"><Lightbulb size={14} /> Hint {unlocked.length}/{maxHints} on this Q</div>
+        {settings?.hints_enabled && totalLifelines > 0 && (
+          <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
+            <Lightbulb size={14} color="#F0B429" />
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              Lifelines: {remainingLifelines}/{totalLifelines}
+            </span>
+            <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
+              {Array.from({ length: totalLifelines }).map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    display: 'inline-block',
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: i < remainingLifelines ? '#F0B429' : 'rgba(255,255,255,0.22)'
+                  }}
+                />
+              ))}
+            </span>
+          </div>
         )}
         {settings?.calculator && (
           <button className="btn btn-sm btn-ghost" onClick={() => setShowCalc((v) => !v)}><Calculator size={14} /> Calc</button>
@@ -308,31 +338,75 @@ export default function ExamLive() {
             ))}
           </div>
 
-          {settings?.hints_enabled && maxHints > 0 && (
-            <div className="hint-ladder">
-              <div className="hint-ladder-head">
-                <Lightbulb size={16} />
-                <b>Hints for this question</b>
-                <span>{unlocked.length} of {maxHints} open · they never give the key</span>
-              </div>
-              {Array.from({ length: maxHints }).map((_, i) => {
-                const open = i < unlocked.length;
-                const next = i === unlocked.length;
-                return (
-                  <div key={i} className={`hint-step ${open ? 'open' : ''} ${next ? 'next' : ''}`}>
-                    <div className="hint-step-k">{open ? <Lightbulb size={14} /> : <Lock size={14} />} Hint {i + 1}</div>
-                    {open ? (
-                      <p>{unlocked[i]}</p>
-                    ) : next ? (
-                      <button type="button" className="btn btn-sm btn-amber" onClick={useHint}>
-                        Reveal hint {i + 1}
-                      </button>
-                    ) : (
-                      <p className="muted-hint">Open hint {i} first.</p>
-                    )}
+          {/* Lifeline Hint Block on the Question */}
+          {settings?.hints_enabled && totalLifelines > 0 && (
+            <div style={{ marginTop: 22 }}>
+              {hasUnlockedOnQ ? (
+                <div className="hint-ladder" style={{ background: '#FFFDF9', border: '1px solid #E8DFD0', borderRadius: 14, padding: 16 }}>
+                  <div className="hint-ladder-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#9A6B00' }}>
+                      <Lightbulb size={16} color="#F0B429" />
+                      <span>Hint Lifeline Active for Q.{idx + 1}</span>
+                    </div>
+                    <span className="tag green" style={{ fontSize: 11, fontWeight: 700 }}>Unlocked</span>
                   </div>
-                );
-              })}
+                  <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>
+                    {unlocked[0]}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                    💡 Hints nudge your concept without revealing the correct option key.
+                  </div>
+                </div>
+              ) : remainingLifelines > 0 ? (
+                <div style={{
+                  background: 'rgba(240, 180, 41, 0.08)',
+                  border: '1.5px dashed rgba(240, 180, 41, 0.55)',
+                  borderRadius: 14,
+                  padding: '14px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#FCE7B2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Lightbulb size={18} color="#9A6B00" />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#6A4800' }}>
+                        Stuck? Use a Hint Lifeline
+                      </div>
+                      <div style={{ fontSize: 12, color: '#8A6820' }}>
+                        You have <b>{remainingLifelines}</b> of {totalLifelines} hint lifelines left across this paper.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-amber"
+                    onClick={useHint}
+                    style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Lightbulb size={14} /> Reveal hint on Q.{idx + 1}
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  background: 'var(--surface-sunken, #F5F1E8)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: 'var(--muted)',
+                  fontSize: 12
+                }}>
+                  <Lock size={14} />
+                  <span>All {totalLifelines} hint lifelines have been used. Solve remaining questions independently!</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -362,9 +436,23 @@ export default function ExamLive() {
             <Flag size={14} /> {answers[q.id]?.marked ? 'Marked' : 'Mark for review'}
           </button>
         )}
-        {settings?.hints_enabled && maxHints > 0 && (
-          <button className="btn btn-line" style={{ color: '#9A6B00', borderColor: '#F0B429' }} onClick={useHint} disabled={unlocked.length >= maxHints}>
-            <Lightbulb size={14} /> {unlocked.length >= maxHints ? 'All hints open' : `Hint ${unlocked.length + 1}`}
+        {settings?.hints_enabled && totalLifelines > 0 && (
+          <button
+            className="btn btn-line"
+            style={{
+              color: hasUnlockedOnQ ? '#137333' : remainingLifelines > 0 ? '#9A6B00' : 'var(--muted)',
+              borderColor: hasUnlockedOnQ ? '#CEEAD6' : remainingLifelines > 0 ? '#F0B429' : 'var(--border)'
+            }}
+            onClick={useHint}
+            disabled={hasUnlockedOnQ || remainingLifelines <= 0}
+            title={hasUnlockedOnQ ? 'Hint already unlocked on this Q' : remainingLifelines > 0 ? `Use 1 lifeline (${remainingLifelines} left)` : '0 Lifelines left'}
+          >
+            <Lightbulb size={14} />
+            {hasUnlockedOnQ
+              ? 'Hint active on this Q'
+              : remainingLifelines > 0
+                ? `Hint Lifelines (${remainingLifelines} left)`
+                : '0 Lifelines left'}
           </button>
         )}
         <div style={{ flex: 1 }} />

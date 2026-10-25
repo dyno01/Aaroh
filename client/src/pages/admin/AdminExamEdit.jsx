@@ -93,11 +93,15 @@ export default function AdminExamEdit() {
           <div className="settings-grid" style={{ marginTop: 12 }}>
             <div className="hint-cap">
               <div style={{ flex: 1 }}>
-                <label className="fld">Hint cap · {exam.max_hints}</label>
-                <input type="range" min="0" max="20" value={exam.max_hints} onChange={(e) => patch({ max_hints: Number(e.target.value) })} />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn btn-sm btn-amber" onClick={() => patch({ max_hints: exam.max_hints + 1 }, 'Coach added +1 hint')}>+1 hint now</button>
+                <label className="fld">Hint Lifelines Pool · {exam.max_hints} total per student</label>
+                <input type="range" min="0" max="10" value={exam.max_hints} onChange={(e) => patch({ max_hints: Number(e.target.value) })} />
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm btn-amber" onClick={() => patch({ max_hints: (exam.max_hints || 0) + 1 }, 'Coach added +1 lifeline')}>+1 lifeline</button>
+                  <button className="btn btn-sm btn-line" onClick={() => patch({ max_hints: 3, hints_enabled: true }, 'Set to 3 lifelines')}>Set 3 (Standard)</button>
                   <button className="btn btn-sm btn-line" onClick={() => patch({ max_hints: 0, hints_enabled: false }, 'Hints frozen')}>Freeze hints</button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+                  Students can use these lifelines on whichever questions they need help with.
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, Clock, CheckCircle2, XCircle, Award, ArrowRight } from 'lucide-react';
+import { BarChart3, Clock, CheckCircle2, XCircle, Award, ArrowRight, X, BookOpen, Lightbulb, User, Target, Percent } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -271,30 +272,52 @@ export default function AdminStudents() {
         </table>
       </div>
 
-      {/* Student Performance & Test Results Modal */}
-      {perfStudent && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(26, 22, 18, 0.75)',
-          backdropFilter: 'blur(5px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: 16
-        }}>
-          <div className="card" style={{ maxWidth: 840, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.35)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Avatar name={perfStudent.name} color={perfStudent.avatar_color} size={42} />
+      {/* Student Performance & Test Results Modal using createPortal so it attaches directly to body */}
+      {perfStudent && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 12, 10, 0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '24px 16px'
+          }}
+          onClick={() => setPerfStudent(null)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: 880,
+              width: '100%',
+              maxHeight: '88vh',
+              overflowY: 'auto',
+              borderRadius: 22,
+              background: 'var(--paper, #FFFFFF)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+              padding: 28,
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 16, marginBottom: 20 }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <Avatar name={perfStudent.name} color={perfStudent.avatar_color} size={46} />
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 20 }}>{perfStudent.name} — Performance & Analytics</h2>
-                  <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 2 }}>
-                    {perfStudent.email} · {perfStudent.role} · streak {perfStudent.streak}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h2 style={{ margin: 0, fontSize: 22 }}>{perfStudent.name}</h2>
+                    <span className={`tag ${perfStudent.role === 'admin' ? 'gold' : ''}`} style={{ fontSize: 11, textTransform: 'capitalize' }}>
+                      {perfStudent.role}
+                    </span>
+                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
+                    {perfStudent.email} · Streak {perfStudent.streak} days
                   </div>
                 </div>
               </div>
@@ -302,9 +325,18 @@ export default function AdminStudents() {
                 type="button"
                 className="btn btn-sm btn-line"
                 onClick={() => setPerfStudent(null)}
-                style={{ padding: '4px 10px' }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%'
+                }}
+                title="Close"
               >
-                ✕ Close
+                <X size={16} />
               </button>
             </div>
 
@@ -315,41 +347,60 @@ export default function AdminStudents() {
             ) : (
               <div>
                 {/* KPI Metrics */}
-                <div className="kpi-row" style={{ marginBottom: 18 }}>
-                  <div className="kpi">
-                    <div className="n">{perfData.stats.tests_taken}</div>
-                    <div className="l">Tests Taken</div>
+                <div className="admin-grid" style={{ marginBottom: 22 }}>
+                  <div className="kpi" style={{ background: '#FAF7F2', borderRadius: 16, padding: '14px 18px' }}>
+                    <div className="n" style={{ fontSize: 28 }}>{perfData.stats.tests_taken}</div>
+                    <div className="l" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <BookOpen size={13} color="var(--muted)" /> Tests Taken
+                    </div>
                   </div>
-                  <div className="kpi">
-                    <div className="n">{perfData.stats.avg_score}</div>
-                    <div className="l">Average Score</div>
+                  <div className="kpi" style={{ background: '#FAF7F2', borderRadius: 16, padding: '14px 18px' }}>
+                    <div className="n" style={{ fontSize: 28 }}>{perfData.stats.avg_score}</div>
+                    <div className="l" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Target size={13} color="var(--muted)" /> Average Score
+                    </div>
                   </div>
-                  <div className="kpi">
-                    <div className="n">{perfData.stats.best_score}</div>
-                    <div className="l">Best Score</div>
+                  <div className="kpi" style={{ background: '#FAF7F2', borderRadius: 16, padding: '14px 18px' }}>
+                    <div className="n" style={{ fontSize: 28 }}>{perfData.stats.best_score}</div>
+                    <div className="l" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Award size={13} color="var(--muted)" /> Best Score
+                    </div>
                   </div>
-                  <div className="kpi">
-                    <div className="n">{perfData.stats.avg_accuracy}%</div>
-                    <div className="l">Mean Accuracy</div>
+                  <div className="kpi" style={{ background: '#FAF7F2', borderRadius: 16, padding: '14px 18px' }}>
+                    <div className="n" style={{ fontSize: 28 }}>{perfData.stats.avg_accuracy}%</div>
+                    <div className="l" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Percent size={13} color="var(--muted)" /> Mean Accuracy
+                    </div>
                   </div>
                 </div>
 
                 {/* Subject Mastery Breakdown */}
                 {perfData.subjects?.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <h3 style={{ fontSize: 16, marginBottom: 10 }}>Subject Breakdown & Accuracy</h3>
-                    <div className="stack" style={{ gap: 8 }}>
+                  <div style={{ marginBottom: 22 }}>
+                    <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Subject Breakdown & Accuracy</h3>
+                    <div className="stack" style={{ gap: 10 }}>
                       {perfData.subjects.map((sub) => (
-                        <div key={sub.subject} style={{ background: 'var(--surface-sunken)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                        <div key={sub.subject} style={{ background: '#FAF7F2', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
                             <b>{sub.subject}</b>
                             <span style={{ fontWeight: 700, color: sub.accuracy >= 70 ? 'var(--green, #1F9D6C)' : sub.accuracy < 50 ? 'var(--red, #E24B4A)' : 'var(--amber, #F0B429)' }}>
                               {sub.accuracy}% accuracy
                             </span>
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 12 }}>
-                            <span>✓ {sub.correct} correct</span>
-                            <span>✗ {sub.wrong} wrong</span>
+                          {/* Visual progress bar */}
+                          <div style={{ height: 6, background: '#EAE3D6', borderRadius: 999, overflow: 'hidden', marginBottom: 8 }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${Math.min(100, Math.max(0, sub.accuracy))}%`,
+                                background: sub.accuracy >= 70 ? '#1F9D6C' : sub.accuracy < 50 ? '#E24B4A' : '#F0B429',
+                                borderRadius: 999
+                              }}
+                            />
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 14 }}>
+                            <span style={{ color: '#1F9D6C', fontWeight: 600 }}>✓ {sub.correct} correct</span>
+                            <span style={{ color: '#E24B4A', fontWeight: 600 }}>✗ {sub.wrong} wrong</span>
                             <span>- {sub.skipped} skipped</span>
                             <span>Total questions: {sub.total}</span>
                           </div>
@@ -360,20 +411,61 @@ export default function AdminStudents() {
                 )}
 
                 {/* Submitted Tests List */}
-                <h3 style={{ fontSize: 16, marginBottom: 10 }}>Submitted Test Papers</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 16, margin: 0 }}>Submitted Test Papers</h3>
+                  {perfData.attempts?.length > 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{perfData.attempts.length} papers recorded</span>
+                  )}
+                </div>
+
                 {perfData.attempts?.length === 0 ? (
-                  <p className="lead" style={{ fontSize: 14, color: 'var(--muted)' }}>
-                    {perfStudent.name} has not submitted any tests yet.
-                  </p>
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '36px 20px',
+                    background: '#FAF7F2',
+                    borderRadius: 16,
+                    border: '1.5px dashed var(--border)',
+                    marginTop: 6
+                  }}>
+                    <div style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: '50%',
+                      background: '#EFE8DC',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 12
+                    }}>
+                      <BookOpen size={24} color="#8A8378" />
+                    </div>
+                    <h4 style={{ margin: '0 0 6px', fontSize: 16 }}>No test papers submitted yet</h4>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+                      {perfStudent.name} hasn't taken any tests yet. When they sit for a paper, question accuracy breakdowns, hint lifelines used, and question reviews will appear here.
+                    </p>
+                    <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-line"
+                        onClick={() => {
+                          setPerfStudent(null);
+                          nav('/app/tests');
+                        }}
+                      >
+                        View Question Bank
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="table">
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 14 }}>
+                    <table className="table" style={{ margin: 0 }}>
                       <thead>
                         <tr>
                           <th>Paper</th>
                           <th>Score</th>
                           <th>Accuracy</th>
-                          <th>Questions</th>
+                          <th>Breakdown</th>
+                          <th>Lifelines</th>
                           <th>Time</th>
                           <th>Submitted</th>
                           <th style={{ textAlign: 'right' }}>Review</th>
@@ -390,7 +482,7 @@ export default function AdminStudents() {
                               <b>{att.score}</b> <span style={{ fontSize: 12, color: 'var(--muted)' }}>/ {att.max_score}</span>
                             </td>
                             <td>
-                              <span className={`tag ${att.accuracy >= 70 ? 'green' : att.accuracy < 50 ? 'amber' : ''}`}>
+                              <span className={`tag ${att.accuracy >= 70 ? 'green' : att.accuracy < 50 ? 'amber' : ''}`} style={{ fontWeight: 700 }}>
                                 {att.accuracy}%
                               </span>
                             </td>
@@ -401,6 +493,11 @@ export default function AdminStudents() {
                               {' · '}
                               <span style={{ color: 'var(--muted)' }}>{att.skipped_count}-</span>
                             </td>
+                            <td>
+                              <span style={{ fontSize: 12, color: att.hints_used > 0 ? '#9A6B00' : 'var(--muted)', fontWeight: att.hints_used > 0 ? 600 : 400 }}>
+                                💡 {att.hints_used || 0}
+                              </span>
+                            </td>
                             <td style={{ fontSize: 12 }}>{Math.round((att.duration_sec || 0) / 60)}m</td>
                             <td style={{ fontSize: 12, color: 'var(--muted)' }}>
                               {new Date(att.submitted_at).toLocaleDateString()}
@@ -409,8 +506,9 @@ export default function AdminStudents() {
                               <button
                                 className="btn btn-sm btn-violet"
                                 onClick={() => nav(`/app/result/${att.id}`)}
+                                title="Review student answers and question explanations"
                               >
-                                View Result
+                                Review Sheet
                               </button>
                             </td>
                           </tr>
@@ -422,35 +520,58 @@ export default function AdminStudents() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Edit User Modal */}
-      {editing && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(26, 22, 18, 0.65)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: 16
-        }}>
-          <div className="card" style={{ maxWidth: 460, width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Edit User Details</h3>
+      {/* Edit User Modal using createPortal so it attaches directly to body */}
+      {editing && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 12, 10, 0.72)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: 16
+          }}
+          onClick={() => setEditing(null)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: 480,
+              width: '100%',
+              borderRadius: 20,
+              background: 'var(--paper, #FFFFFF)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+              padding: 24
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Edit User Account</h3>
               <button
                 type="button"
                 className="btn btn-sm btn-line"
                 onClick={() => setEditing(null)}
-                style={{ padding: '4px 8px' }}
+                style={{
+                  width: 30,
+                  height: 30,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%'
+                }}
               >
-                ✕
+                <X size={15} />
               </button>
             </div>
 
@@ -508,7 +629,8 @@ export default function AdminStudents() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

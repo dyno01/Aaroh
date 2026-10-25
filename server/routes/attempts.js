@@ -162,7 +162,9 @@ function payloadForAttempt(attempt, res, extra = {}) {
       answers: JSON.parse(attempt.answers_json || '{}'),
       current_qid: attempt.current_qid,
       current_section: attempt.current_section,
-      hints_used: attempt.hints_used,
+      hints_used: attempt.hints_used || 0,
+      total_lifelines: Number.isFinite(Number(exam.max_hints)) ? Number(exam.max_hints) : 3,
+      remaining_lifelines: Math.max(0, (Number.isFinite(Number(exam.max_hints)) ? Number(exam.max_hints) : 3) - (attempt.hints_used || 0)),
       remaining,
       paused: !!attempt.paused
     },
@@ -203,26 +205,59 @@ router.post('/:id/hint', auth(), (req, res) => {
   const q = db.prepare('SELECT * FROM questions WHERE id = ? AND exam_id = ?').get(questionId, exam.id);
   if (!q) return res.status(404).json({ error: 'Question not found' });
   if (!exam.hints_enabled) return res.status(403).json({ error: 'Hints are turned off for this paper' });
+
   const allHints = parseHints(q).length ? parseHints(q) : buildHints(q);
-  const max = maxHintLevels(exam, allHints);
   const answers = JSON.parse(attempt.answers_json || '{}');
-  const unlocked = Math.min(max, Number(answers[questionId]?.hintLevel || 0));
+  const alreadyUnlocked = Number(answers[questionId]?.hintLevel || 0) > 0;
+  const totalLifelines = Number.isFinite(Number(exam.max_hints)) ? Number(exam.max_hints) : 3;
+  const currentHintsUsed = attempt.hints_used || 0;
+  const remainingLifelines = Math.max(0, totalLifelines - currentHintsUsed);
+
   if (peek) {
-    return res.json({ hints: allHints.slice(0, unlocked), unlocked, max, hints_used: attempt.hints_used || 0 });
+    const unlockedHints = alreadyUnlocked ? allHints.slice(0, 1) : [];
+    return res.json({
+      hints: unlockedHints,
+      unlocked: unlockedHints.length,
+      max: 1,
+      hints_used: currentHintsUsed,
+      total_lifelines: totalLifelines,
+      remaining_lifelines: remainingLifelines
+    });
   }
-  if (max <= 0) return res.status(403).json({ error: 'No hints on this question' });
-  if (unlocked >= max) {
-    return res.json({ hints: allHints.slice(0, unlocked), unlocked, max, done: true, hints_used: attempt.hints_used || 0 });
+
+  // If already unlocked on this question, return without spending a lifeline
+  if (alreadyUnlocked) {
+    return res.json({
+      hints: allHints.slice(0, 1),
+      unlocked: 1,
+      max: 1,
+      hint: allHints[0],
+      hints_used: currentHintsUsed,
+      total_lifelines: totalLifelines,
+      remaining_lifelines: remainingLifelines,
+      already: true
+    });
   }
-  const next = unlocked + 1;
-  answers[questionId] = { ...(answers[questionId] || {}), hintLevel: next, hintUsed: true };
+
+  // If student is trying to unlock on a new question but lifelines are exhausted:
+  if (remainingLifelines <= 0) {
+    return res.status(403).json({
+      error: `You have used all ${totalLifelines} hint lifelines for this test. No lifelines remaining!`
+    });
+  }
+
+  const nextUsed = currentHintsUsed + 1;
+  answers[questionId] = { ...(answers[questionId] || {}), hintLevel: 1, hintUsed: true };
   db.prepare('UPDATE attempts SET hints_used = hints_used + 1, answers_json = ? WHERE id = ?').run(JSON.stringify(answers), attempt.id);
+
   res.json({
-    hints: allHints.slice(0, next),
-    unlocked: next,
-    max,
-    hint: allHints[next - 1],
-    hints_used: (attempt.hints_used || 0) + 1
+    hints: allHints.slice(0, 1),
+    unlocked: 1,
+    max: 1,
+    hint: allHints[0],
+    hints_used: nextUsed,
+    total_lifelines: totalLifelines,
+    remaining_lifelines: Math.max(0, totalLifelines - nextUsed)
   });
 });
 

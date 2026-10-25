@@ -34,7 +34,7 @@ export default function ExamIntro() {
   }
 
   const flags = [
-    [!!e.hints_enabled, <Lightbulb size={12} />, `${e.max_hints} hints`],
+    [!!e.hints_enabled, <Lightbulb size={12} />, `${e.max_hints} hint lifelines`],
     [!!e.calculator, <Calculator size={12} />, 'Calculator'],
     [!!e.bilingual, <Languages size={12} />, 'EN / हिन्दी'],
     [!!e.mark_for_review, <Flag size={12} />, 'Mark for review'],
@@ -50,7 +50,7 @@ export default function ExamIntro() {
       <div className="kpi-row">
         <div className="kpi"><FileQuestion size={16} className="ico-sm" /><div className="n">{e.question_count}</div><div className="l">Questions</div></div>
         <div className="kpi"><Clock size={16} className="ico-sm" /><div className="n">{Math.round(e.duration_sec / 60)}</div><div className="l">Minutes</div></div>
-        <div className="kpi"><Lightbulb size={16} className="ico-sm" /><div className="n">{e.max_hints}</div><div className="l">Hint cap</div></div>
+        <div className="kpi"><Lightbulb size={16} className="ico-sm" /><div className="n">{e.max_hints}</div><div className="l">Hint lifelines</div></div>
       </div>
       <div className="intro-flags">
         {flags.map(([on, icon, label]) => (
@@ -61,7 +61,7 @@ export default function ExamIntro() {
         <h3>Instructions</h3>
         <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--ink-2)', fontSize: 14, margin: 0 }}>{e.instructions}</pre>
         <div style={{ display: 'flex', gap: 10, marginTop: 12, color: 'var(--muted)', fontSize: 13, alignItems: 'center' }}>
-          <AlertTriangle size={14} /> Negative marking {e.negative_per_q} per wrong. Coach may change hints and extra time while you write.
+          <AlertTriangle size={14} /> Negative marking {e.negative_per_q} per wrong. You have {e.max_hints} hint lifelines to use anytime on whichever questions you need.
         </div>
       </div>
       {e.sections?.length > 0 && (
