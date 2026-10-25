@@ -83,7 +83,7 @@ function syncFromExams(db) {
 
 function listStyles(db, kind) {
   return db.prepare(
-    'SELECT id, slug, label, coming_soon, sort_order FROM paper_styles WHERE kind = ? ORDER BY sort_order, label'
+    'SELECT id, slug, label, coming_soon, sort_order FROM paper_styles WHERE kind = ? ORDER BY sort_order ASC, id ASC'
   ).all(kind);
 }
 

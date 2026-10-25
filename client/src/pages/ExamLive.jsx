@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import { api } from '../lib/api';
 import { Calculator, Lightbulb, Pause, Flag, Send, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import MathText from '../components/MathText.jsx';
+import ScientificCalculator from '../components/ScientificCalculator.jsx';
 
 function fmt(sec) {
   const s = Math.max(0, sec | 0);
@@ -584,18 +585,7 @@ export default function ExamLive() {
       )}
 
       {showCalc && (
-        <div className="calc-pop">
-          <input value={calc} onChange={(e) => setCalc(e.target.value)} placeholder="Expression" />
-          <div className="calc-keys">
-            {['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0', '.', '=', '+'].map((k) => (
-              <button key={k} onClick={() => {
-                if (k === '=') {
-                  try { setCalc(String(Function(`"use strict"; return (${calc})`)())); } catch { setCalc('Err'); }
-                } else setCalc((c) => c + k);
-              }}>{k}</button>
-            ))}
-          </div>
-        </div>
+        <ScientificCalculator onClose={() => setShowCalc(false)} />
       )}
     </div>
   );
