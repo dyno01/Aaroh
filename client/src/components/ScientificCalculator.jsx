@@ -8,12 +8,22 @@ export default function ScientificCalculator({ onClose }) {
   const [isNewNumber, setIsNewNumber] = useState(true);
   const [memory, setMemory] = useState(0);
 
-  // Dragging state
-  const [pos, setPos] = useState({ x: Math.max(20, window.innerWidth - 380), y: Math.max(60, window.innerHeight - 560) });
+  // Mobile & Dragging state
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  const [pos, setPos] = useState({ x: Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 800) - 380), y: Math.max(60, (typeof window !== 'undefined' ? window.innerHeight : 600) - 560) });
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0, posX: 0, posY: 0 });
 
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   function onMouseDown(e) {
+    if (isMobile) return;
     if (e.target.closest('button')) return; // Don't drag if clicking buttons
     setDragging(true);
     dragRef.current = {
@@ -245,36 +255,72 @@ export default function ScientificCalculator({ onClose }) {
   });
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        left: `${pos.x}px`,
-        top: `${pos.y}px`,
-        width: '350px',
-        background: '#181512',
-        color: '#F6F1E8',
-        borderRadius: 18,
-        boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.12)',
-        zIndex: 9999,
-        userSelect: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}
-    >
-      {/* Title Bar / Drag Handle */}
+    <>
+      {isMobile && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(3px)',
+            WebkitBackdropFilter: 'blur(3px)',
+            zIndex: 9998
+          }}
+          aria-hidden="true"
+        />
+      )}
       <div
-        onMouseDown={onMouseDown}
-        style={{
-          padding: '10px 14px',
-          background: 'linear-gradient(90deg, #24201B 0%, #1D1A16 100%)',
-          borderBottom: '1px solid #332D26',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          cursor: dragging ? 'grabbing' : 'grab'
-        }}
+        style={
+          isMobile
+            ? {
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                width: '100%',
+                maxHeight: '92vh',
+                background: '#181512',
+                color: '#F6F1E8',
+                borderRadius: '24px 24px 0 0',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+                zIndex: 9999,
+                display: 'flex',
+                flexDirection: 'column',
+                overflowY: 'auto',
+                userSelect: 'none',
+                paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
+              }
+            : {
+                position: 'fixed',
+                left: `${pos.x}px`,
+                top: `${pos.y}px`,
+                width: '350px',
+                background: '#181512',
+                color: '#F6F1E8',
+                borderRadius: 18,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.12)',
+                zIndex: 9999,
+                userSelect: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+              }
+        }
       >
+        {/* Title Bar / Drag Handle */}
+        <div
+          onMouseDown={onMouseDown}
+          style={{
+            padding: isMobile ? '12px 16px' : '10px 14px',
+            background: 'linear-gradient(90deg, #24201B 0%, #1D1A16 100%)',
+            borderBottom: '1px solid #332D26',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: isMobile ? 'default' : dragging ? 'grabbing' : 'grab'
+          }}
+        >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Move size={14} color="#C9C2B6" />
           <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.02em', color: '#F6F1E8' }}>
@@ -705,5 +751,6 @@ export default function ScientificCalculator({ onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

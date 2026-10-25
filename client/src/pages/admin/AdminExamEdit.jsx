@@ -71,7 +71,8 @@ export default function AdminExamEdit() {
     ['allow_pause', 'Allow pause', 'Timer freezes'],
     ['show_timer', 'Show timer', 'Countdown in the hall'],
     ['allow_section_switch', 'Switch sections', 'Jump across sections'],
-    ['is_published', 'Published', 'Visible to students']
+    ['is_published', 'Published', 'Visible to students'],
+    ['is_new', "★ 'NEW' badge", 'Shows NEW badge to students until next upload or cleared']
   ];
 
   return (

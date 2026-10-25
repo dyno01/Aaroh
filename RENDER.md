@@ -52,13 +52,19 @@ Do **not** set `NODE_ENV=production` as a build env var (Render already does tha
 
 Import papers from Coach desk after login. Do **not** run `seed.js`.
 
-## SQLite on free Render
+## Backblaze B2 Automatic Backup & Sleep Protection
 
-The database file lives on the instance disk. **Free web services lose that disk when the app sleeps or redeploys.** After a restart you may need to import papers again.
+Aaroh now includes **automatic Backblaze B2 cloud database backup and restore**:
+1. **Never lose scores or attempts**: Whenever students submit attempts, save answers, or gain streaks, changes are automatically and safely backed up to Backblaze B2 (`database/aaroh.db`).
+2. **Settings never reset**: Custom exam settings, calculators, hints, and passwords are preserved in Backblaze B2 and are not clobbered on reboots.
+3. **Zero-downtime wake-up**: When Render free services spin down after inactivity and wake up on a fresh container, Aaroh downloads the latest database from Backblaze B2 before starting the server. It feels like nothing ever stopped!
+4. **Shutdown snapshot**: On Render sleep or redeployment (`SIGTERM`), pending changes are immediately snapshotted and uploaded to Backblaze B2.
 
-To keep data: add a **persistent disk** (paid) mounted at `/data`, then set:
-
-`DB_PATH=/data/aaroh.db`
+Optional environment variables for your own bucket:
+- `B2_KEY_ID`
+- `B2_APPLICATION_KEY`
+- `B2_BUCKET_ID`
+- `B2_BUCKET_NAME` (default: `aaroh-papers`)
 
 ## Local dual ports
 

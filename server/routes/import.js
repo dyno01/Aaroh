@@ -6,6 +6,7 @@ const db = require('../db');
 const { auth, admin } = require('../middleware/auth');
 const { packHints, buildHints } = require('../lib/hints');
 const { upsertStyle, prettySlug, slugFamily, slugType } = require('../lib/styles');
+const { scheduleDbBackup } = require('../lib/dbBackup');
 
 const router = express.Router();
 router.use(auth(), admin);
@@ -342,9 +343,77 @@ function ingestRows(rows, replaceQuestions = true, saveToDisk = true) {
   return summary;
 }
 
+function extractFromZipBuffer(buffer) {
+  try {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(buffer);
+    const zipEntries = zip.getEntries();
+    const csvFiles = [];
+    for (const entry of zipEntries) {
+      if (entry.isDirectory) continue;
+      const entryName = entry.entryName;
+      if (entryName.includes('__MACOSX') || path.basename(entryName).startsWith('.')) continue;
+      const lower = entryName.toLowerCase();
+      if (lower.endsWith('.csv') || lower.endsWith('.json')) {
+        const data = entry.getData();
+        csvFiles.push({
+          originalname: path.basename(entryName),
+          entryPath: entryName,
+          buffer: data,
+          size: data.length
+        });
+      }
+    }
+    return csvFiles;
+  } catch (err) {
+    throw new Error(`Failed to extract ZIP archive: ${err.message}`);
+  }
+}
+
+function expandUploadedFiles(files) {
+  const expanded = [];
+  for (const f of files) {
+    const isZip = (f.originalname || '').toLowerCase().endsWith('.zip') ||
+      (f.buffer && f.buffer.length >= 4 && f.buffer[0] === 0x50 && f.buffer[1] === 0x4B);
+    if (isZip) {
+      const inside = extractFromZipBuffer(f.buffer);
+      if (!inside.length) {
+        throw new Error(`ZIP archive "${f.originalname}" contains no .csv or .json files.`);
+      }
+      expanded.push(...inside);
+    } else {
+      expanded.push(f);
+    }
+  }
+  return expanded;
+}
+
+function markBatchAsNew(examIds) {
+  if (!examIds || !examIds.length) return;
+  try {
+    db.prepare('UPDATE exams SET is_new = 0 WHERE is_new = 1').run();
+    const placeholders = examIds.map(() => '?').join(',');
+    db.prepare(`UPDATE exams SET is_new = 1 WHERE id IN (${placeholders})`).run(...examIds);
+  } catch (e) {
+    console.warn('Could not mark exams as new:', e.message);
+  }
+}
+
 function parseUploadBuffer(buffer, originalName = '') {
-  const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   const name = originalName.toLowerCase();
+  const isZip = name.endsWith('.zip') || (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4B);
+  if (isZip) {
+    const extracted = extractFromZipBuffer(buffer);
+    if (!extracted.length) throw new Error('ZIP archive contains no .csv or .json files');
+    const allRows = [];
+    for (const f of extracted) {
+      const res = parseUploadBuffer(f.buffer, f.originalname);
+      if (res.rows) allRows.push(...res.rows);
+    }
+    return { rows: allRows, kind: 'zip', countFiles: extracted.length, headers: Object.keys(allRows[0] || {}) };
+  }
+
+  const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   if (name.endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return { rows: parsed, kind: 'json', headers: Object.keys(parsed[0] || {}) };
@@ -381,7 +450,7 @@ function parseUploadBuffer(buffer, originalName = '') {
 function readUpload(req) {
   if (req.body?.rows) return { rows: req.body.rows, kind: 'json' };
   const file = req.file || (req.files && req.files[0]);
-  if (!file) throw new Error('Upload a CSV or JSON file');
+  if (!file) throw new Error('Upload a CSV, JSON, or ZIP archive file');
   return parseUploadBuffer(file.buffer, file.originalname || '');
 }
 
@@ -411,19 +480,22 @@ router.post('/commit', upload.any(), (req, res) => {
     const replace = req.body?.replace !== '0' && req.body?.replace !== false;
     const saveToDisk = req.body?.saveToDisk !== '0' && req.body?.saveToDisk !== false;
     const summary = ingestRows(rows, replace, saveToDisk);
+    markBatchAsNew(summary.map((s) => s.examId));
     db.prepare('INSERT INTO audit_log (admin_id, action, entity, payload) VALUES (?, ?, ?, ?)')
       .run(req.user.id, 'import', 'exam', JSON.stringify(summary));
+    scheduleDbBackup(2000);
     res.json({ ok: true, summary });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
 });
 
-// Bulk preview endpoint: Inspects up to 100 files without committing
+// Bulk preview endpoint: Inspects up to 100 files (or ZIP archives / folders) without committing
 router.post('/bulk-preview', upload.array('files', 100), (req, res) => {
   try {
-    const files = req.files || [];
-    if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
+    const rawFiles = req.files || [];
+    if (!rawFiles.length) return res.status(400).json({ error: 'No files uploaded' });
+    const files = expandUploadedFiles(rawFiles);
     const fileSummaries = [];
     let totalQuestions = 0;
     for (const f of files) {
@@ -459,11 +531,12 @@ router.post('/bulk-preview', upload.array('files', 100), (req, res) => {
   }
 });
 
-// Bulk commit endpoint: Ingests all uploaded files into database AND persists to disk in test/ folder
+// Bulk commit endpoint: Ingests all uploaded files (or ZIP / folder) into database AND persists to disk in test/ folder
 router.post('/bulk-commit', upload.array('files', 100), (req, res) => {
   try {
-    const files = req.files || [];
-    if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
+    const rawFiles = req.files || [];
+    if (!rawFiles.length) return res.status(400).json({ error: 'No files uploaded' });
+    const files = expandUploadedFiles(rawFiles);
     const allSummary = [];
     const errors = [];
     const replace = req.body?.replace !== '0' && req.body?.replace !== false;
@@ -479,8 +552,10 @@ router.post('/bulk-commit', upload.array('files', 100), (req, res) => {
       }
     }
 
+    markBatchAsNew(allSummary.map((s) => s.examId));
     db.prepare('INSERT INTO audit_log (admin_id, action, entity, payload) VALUES (?, ?, ?, ?)')
       .run(req.user.id, 'bulk_import', 'exam', JSON.stringify({ imported: allSummary.length, errors }));
+    scheduleDbBackup(2000);
 
     res.json({
       ok: true,
@@ -513,6 +588,8 @@ router.post('/json', (req, res) => {
     const replace = body.replace !== false;
     const saveToDisk = body.saveToDisk !== false;
     const summary = ingestRows(rows, replace, saveToDisk);
+    markBatchAsNew(summary.map((s) => s.examId));
+    scheduleDbBackup(2000);
     res.json({ ok: true, summary });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -523,6 +600,7 @@ router.post('/sync-folder', (req, res) => {
   try {
     const { importTestFolder } = require('../lib/importPack');
     const results = importTestFolder(db);
+    scheduleDbBackup(2000);
     res.json({
       ok: true,
       imported: results.length,

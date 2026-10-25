@@ -139,8 +139,9 @@ try {
 try {
   const ecols = db.prepare('PRAGMA table_info(exams)').all().map((c) => c.name);
   if (!ecols.includes('hint_mode')) db.exec("ALTER TABLE exams ADD COLUMN hint_mode TEXT DEFAULT 'lifeline'");
+  if (!ecols.includes('is_new')) db.exec('ALTER TABLE exams ADD COLUMN is_new INTEGER DEFAULT 0');
 } catch (e) {
-  console.error('hint_mode migrate', e);
+  console.error('hint_mode / is_new migrate', e);
 }
 
 try {
@@ -202,37 +203,25 @@ try {
     console.log(`Cleaned up ${mockUserIds.length} mock student accounts.`);
   }
 
-  // 2. Setup Ishwar Rathod as ONLY Admin
-  // Remove any duplicate admin@aaroh.in user row
+  // 2. Setup Ishwar Rathod as ONLY Admin (create if missing, preserve password and streak if existing)
   db.prepare("DELETE FROM users WHERE email = 'admin@aaroh.in'").run();
 
   const adminRow = db.prepare("SELECT * FROM users WHERE email = 'ishwar@aaroh.in' OR role = 'admin' LIMIT 1").get();
-  if (adminRow) {
-    db.prepare(`
-      UPDATE users SET name = 'Ishwar Rathod', username = 'ishwar', role = 'admin', email = 'ishwar@aaroh.in', streak = 0, password_hash = ?
-      WHERE id = ?
-    `).run(hash, adminRow.id);
-  } else {
+  if (!adminRow) {
     db.prepare(
       "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES ('Ishwar Rathod', 'ishwar@aaroh.in', ?, 'admin', '#5B45EA', 'ishwar', 0)"
     ).run(hash);
+    console.log('Created initial Admin account: ishwar@aaroh.in');
   }
 
-  // 3. Setup Nikita Rathod as dedicated Student with 0 streak
+  // 3. Setup Nikita Rathod as dedicated Student (create if missing, preserve password and streak if existing)
   const nikitaRow = db.prepare("SELECT * FROM users WHERE email = 'nikita@aaroh.in' OR email = 'demo@aaroh.in' OR name LIKE '%Nikita%' LIMIT 1").get();
-  if (nikitaRow) {
-    db.prepare(`
-      UPDATE users SET name = 'Nikita Rathod', username = 'nikita', role = 'student', email = 'nikita@aaroh.in', streak = 0, password_hash = ?
-      WHERE id = ?
-    `).run(hash, nikitaRow.id);
-  } else {
+  if (!nikitaRow) {
     db.prepare(
       "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES ('Nikita Rathod', 'nikita@aaroh.in', ?, 'student', '#F0B429', 'nikita', 0)"
     ).run(hash);
+    console.log('Created initial Student account: nikita@aaroh.in');
   }
-
-  // Reset all streaks to 0 for fresh accounts
-  db.prepare("UPDATE users SET streak = 0").run();
 
   console.log('Verified user accounts: Admin (Ishwar Rathod), Student (Nikita Rathod)');
 } catch (e) {

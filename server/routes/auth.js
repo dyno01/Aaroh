@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { sign, auth, cookieHeader } = require('../middleware/auth');
+const { scheduleDbBackup } = require('../lib/dbBackup');
 
 const router = express.Router();
 const COLORS = ['#5B45EA', '#F0B429', '#1F9D6C', '#E24B4A', '#3B82F6', '#0EA5A4', '#DB2777'];
@@ -21,6 +22,7 @@ router.post('/register', (req, res) => {
   const user = db.prepare('SELECT id, name, email, role, streak, avatar_color, username FROM users WHERE id = ?').get(info.lastInsertRowid);
   const token = sign(user);
   res.setHeader('Set-Cookie', cookieHeader(token, req));
+  scheduleDbBackup(2000);
   res.json({ token, user });
 });
 
@@ -109,6 +111,7 @@ router.patch('/profile', auth(), (req, res) => {
   const user = db.prepare('SELECT id, name, email, role, streak, avatar_color, username FROM users WHERE id = ?').get(row.id);
   const token = sign(user);
   res.setHeader('Set-Cookie', cookieHeader(token, req));
+  scheduleDbBackup(2000);
   res.json({ token, user });
 });
 

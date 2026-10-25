@@ -130,6 +130,34 @@ async function downloadFile(remoteFileName) {
   return res.text();
 }
 
+async function downloadBuffer(remoteFileName) {
+  if (!isB2Configured()) return null;
+  const auth = await authorize();
+  const url = `${auth.downloadUrl}/file/${B2_BUCKET_NAME}/${encodeURI(remoteFileName)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: auth.token }
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    const errText = await res.text();
+    throw new Error(`B2 download failed (${res.status}): ${errText}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+async function getFileInfo(remoteFileName) {
+  if (!isB2Configured()) return null;
+  try {
+    const files = await listFiles(remoteFileName);
+    return files.find((f) => f.fileName === remoteFileName) || null;
+  } catch {
+    return null;
+  }
+}
+
 // Uploads all local CSV papers from test/ to Backblaze B2
 async function syncLocalPapersToB2(testDir) {
   if (!isB2Configured()) return { uploaded: 0 };
@@ -199,11 +227,71 @@ async function uploadPaperCsv(subFolder, fileName, csvContent) {
   return uploadFile(remotePath, csvContent, 'text/csv');
 }
 
+async function deleteFileVersion(fileId, fileName) {
+  if (!isB2Configured()) return null;
+  const auth = await authorize();
+  const res = await fetch(`${auth.apiUrl}/b2api/v3/b2_delete_file_version`, {
+    method: 'POST',
+    headers: {
+      Authorization: auth.token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ fileId, fileName })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to delete file version (${res.status}): ${errText}`);
+  }
+  return res.json();
+}
+
+async function pruneOldFileVersions(remoteFileName, keepCount = 1) {
+  if (!isB2Configured()) return { deleted: 0 };
+  const auth = await authorize();
+  const res = await fetch(`${auth.apiUrl}/b2api/v3/b2_list_file_versions`, {
+    method: 'POST',
+    headers: {
+      Authorization: auth.token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      bucketId: B2_BUCKET_ID,
+      prefix: remoteFileName,
+      maxFileCount: 1000
+    })
+  });
+
+  if (!res.ok) return { deleted: 0 };
+  const data = await res.json();
+  const versions = (data.files || []).filter((f) => f.fileName === remoteFileName);
+  // Sort descending by uploadTimestamp (newest first)
+  versions.sort((a, b) => b.uploadTimestamp - a.uploadTimestamp);
+
+  let deleted = 0;
+  for (let i = keepCount; i < versions.length; i++) {
+    try {
+      await deleteFileVersion(versions[i].fileId, versions[i].fileName);
+      deleted++;
+    } catch (e) {
+      console.warn(`[Backblaze B2] Failed deleting old version ${versions[i].fileId}:`, e.message);
+    }
+  }
+  if (deleted > 0) {
+    console.log(`[Backblaze B2] Cleaned up ${deleted} previous backup version(s) for ${remoteFileName}. Keeping latest ${keepCount}.`);
+  }
+  return { deleted, remaining: Math.min(versions.length, keepCount) };
+}
+
 module.exports = {
   isB2Configured,
   authorize,
   uploadFile,
   downloadFile,
+  downloadBuffer,
+  getFileInfo,
+  deleteFileVersion,
+  pruneOldFileVersions,
   listFiles,
   syncLocalPapersToB2,
   restorePapersFromB2,

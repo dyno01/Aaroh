@@ -88,13 +88,18 @@ function upsertExam(meta, db) {
   };
 
   if (existing) {
+    // Preserve existing admin-configured settings (e.g. calculator, hints, duration, instructions)
     db.prepare(`
-      UPDATE exams SET title=?, description=?, exam_family=?, stage=?, type=?, subject=?, duration_sec=?,
-        marks_per_q=?, negative_per_q=?, difficulty=?, max_hints=?, hints_enabled=?, calculator=?, instructions=?,
-        is_published=1, updated_at=datetime('now') WHERE id=?
-    `).run(fields.title, fields.description, fields.exam_family, fields.stage, fields.type, fields.subject,
-      fields.duration_sec, fields.marks_per_q, fields.negative_per_q, fields.difficulty, fields.max_hints,
-      fields.hints_enabled, fields.calculator, fields.instructions, existing.id);
+      UPDATE exams SET
+        title = COALESCE(title, ?),
+        description = COALESCE(description, ?),
+        exam_family = COALESCE(exam_family, ?),
+        stage = COALESCE(stage, ?),
+        type = COALESCE(type, ?),
+        subject = COALESCE(subject, ?),
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(fields.title, fields.description, fields.exam_family, fields.stage, fields.type, fields.subject, existing.id);
     return existing.id;
   }
 
@@ -173,7 +178,13 @@ function ingestCsvFile(filePath, dbOverride) {
 
   const examId = upsertExam(meta, db);
 
-  // Clear existing questions for clean overwrite
+  // If questions already exist for this exam, preserve them so IDs and attempts remain stable
+  const existingQuestions = db.prepare('SELECT COUNT(*) AS c FROM questions WHERE exam_id = ?').get(examId).c;
+  if (existingQuestions > 0 && !dbOverride?.forceQuestions) {
+    return { code, title, count: existingQuestions, existing: true };
+  }
+
+  // Clear existing questions for clean overwrite if 0 or forced
   db.prepare('DELETE FROM questions WHERE exam_id = ?').run(examId);
 
   let count = 0;

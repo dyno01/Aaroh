@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, RefreshCw, Lightbulb, Zap, Check, ChevronDown, Cloud, Download,
   Sliders, ShieldCheck, Calculator, PauseCircle, Shuffle, Eye, EyeOff,
-  Clock, RotateCcw, CheckSquare, Square, HelpCircle, Layers, CheckCircle2
+  Clock, RotateCcw, CheckSquare, Square, HelpCircle, Layers, CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast.jsx';
@@ -148,11 +149,36 @@ export default function AdminExams() {
     try {
       const r = await api('/api/admin/b2/sync-to-cloud', { method: 'POST' });
       toast.push(`✓ ${r.message || 'Synced all papers to Backblaze B2!'}`);
-      load();
     } catch (err) {
       toast.push(`B2 Sync failed: ${err.message}`);
     } finally {
       setB2Syncing(false);
+    }
+  }
+
+  const newBadgesCount = useMemo(() => exams.filter((e) => Boolean(e.is_new)).length, [exams]);
+
+  async function clearAllNewBadges() {
+    if (!window.confirm("Remove 'NEW' badge from all tests?")) return;
+    try {
+      const res = await api('/api/admin/exams/clear-new-badges', { method: 'POST' });
+      setExams((prev) => prev.map((e) => ({ ...e, is_new: 0 })));
+      toast.push(`✓ ${res.message || 'Cleared all NEW badges'}`);
+    } catch (err) {
+      toast.push(`Failed to clear badges: ${err.message}`);
+    }
+  }
+
+  async function toggleNewBadge(examId, isNew) {
+    try {
+      await api(`/api/admin/exams/${examId}`, {
+        method: 'PATCH',
+        body: { is_new: isNew ? 1 : 0 }
+      });
+      setExams((prev) => prev.map((e) => (e.id === examId ? { ...e, is_new: isNew ? 1 : 0 } : e)));
+      toast.push(isNew ? "Paper marked with 'NEW' badge" : "Removed 'NEW' badge from paper");
+    } catch (err) {
+      toast.push(`Failed to update badge: ${err.message}`);
     }
   }
 
@@ -238,6 +264,24 @@ export default function AdminExams() {
           <Search size={16} color="#8A8378" />
           <input placeholder="Search code or title" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
+        {newBadgesCount > 0 && (
+          <button
+            type="button"
+            className="btn btn-line"
+            onClick={clearAllNewBadges}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              color: '#FF3B30',
+              borderColor: 'rgba(255, 59, 48, 0.35)',
+              fontWeight: 700
+            }}
+            title="Remove 'NEW' badge from all tests"
+          >
+            <Sparkles size={13} strokeWidth={2.6} /> Clear 'NEW' Badges ({newBadgesCount})
+          </button>
+        )}
         <button
           className="btn btn-violet"
           onClick={() => { setBatchOpen((v) => !v); setOpen(false); }}
@@ -252,10 +296,12 @@ export default function AdminExams() {
           onClick={syncB2Cloud}
           disabled={b2Syncing}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          title="Sync all papers to Backblaze B2 cloud storage so they never disappear on redeployment"
+          title={b2Status?.dbBackup?.lastBackupTime
+            ? `Full Cloud Backup Active. Last saved: ${new Date(b2Status.dbBackup.lastBackupTime).toLocaleString()} (${Math.round((b2Status.dbBackup.lastBackupSize || 0) / 1024)} KB)`
+            : "Sync papers and database to Backblaze B2 so scores, attempts & settings never disappear on Render restarts"}
         >
           <Cloud size={14} className={b2Syncing ? 'spin' : ''} />
-          {b2Syncing ? 'Syncing B2…' : `☁ Backblaze B2 (${b2Status?.filesCount ?? 0})`}
+          {b2Syncing ? 'Syncing Cloud…' : `☁ Cloud Backup (${b2Status?.filesCount ?? 0} papers + DB)`}
         </button>
         <button
           className="btn btn-line"
@@ -940,7 +986,47 @@ export default function AdminExams() {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {Boolean(e.is_new) ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleNewBadge(e.id, false)}
+                          title="Click to remove 'NEW' badge from this paper"
+                          style={{
+                            cursor: 'pointer',
+                            background: 'linear-gradient(135deg, #FF3B30, #FF9500)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 999,
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3
+                          }}
+                        >
+                          <Sparkles size={10} strokeWidth={2.8} /> NEW ✕
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => toggleNewBadge(e.id, true)}
+                          title="Click to mark this paper as NEW"
+                          style={{
+                            cursor: 'pointer',
+                            background: 'transparent',
+                            color: 'var(--muted)',
+                            border: '1px dashed var(--line)',
+                            borderRadius: 999,
+                            padding: '1px 6px',
+                            fontSize: 10,
+                            opacity: 0.65
+                          }}
+                        >
+                          + Mark NEW
+                        </button>
+                      )}
                       <span className={`tag ${e.type === 'high_influence' ? 'gold' : e.type === 'full' ? 'ink' : ''}`}>
                         {e.type}
                       </span>

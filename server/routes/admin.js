@@ -6,6 +6,7 @@ const { broadcastExamSettings, broadcastAttemptPatch } = require('../realtime');
 const { packHints, buildHints } = require('../lib/hints');
 const { catalog, upsertStyle, listStyles, slugFamily, slugType, prettySlug } = require('../lib/styles');
 const { saveExamToDisk, examToCsvString, syncAllExamsToDisk } = require('../lib/paperSync');
+const { scheduleDbBackup, backupDatabaseToB2, restoreDatabaseFromB2, getBackupStatus } = require('../lib/dbBackup');
 
 const router = express.Router();
 router.use(auth(), admin);
@@ -21,7 +22,7 @@ const SETTINGS_KEYS = [
   'allow_section_switch', 'show_explanations_after', 'allow_reattempt',
   'shuffle_questions', 'shuffle_options', 'max_attempts', 'passing_pct',
   'is_published', 'duration_sec', 'marks_per_q', 'negative_per_q', 'difficulty',
-  'title', 'description', 'instructions', 'type', 'subject', 'stage', 'exam_family'
+  'title', 'description', 'instructions', 'type', 'subject', 'stage', 'exam_family', 'is_new'
 ];
 
 router.get('/overview', (req, res) => {
@@ -135,7 +136,15 @@ router.patch('/exams/:id', (req, res) => {
   };
   const message = b._message || buildChangeMessage(b);
   broadcastExamSettings(exam.id, liveSettings, message, req.user.name);
+  scheduleDbBackup(2000);
   res.json({ exam: fresh, applied: true, live: true });
+});
+
+router.post('/exams/clear-new-badges', (req, res) => {
+  const result = db.prepare('UPDATE exams SET is_new = 0 WHERE is_new = 1').run();
+  scheduleDbBackup(2000);
+  log(req, 'clear_new_badges', 'exam', null, { cleared: result.changes });
+  res.json({ ok: true, cleared: result.changes, message: `Cleared 'NEW' badge from ${result.changes} test(s)` });
 });
 
 function buildChangeMessage(b) {
@@ -249,6 +258,7 @@ router.post('/exams/batch-settings', (req, res) => {
     settings: mergedSettings
   });
 
+  scheduleDbBackup(2000);
   res.json({
     ok: true,
     count: targetExams.length,
@@ -465,6 +475,7 @@ router.patch('/students/:id', (req, res) => {
   }
   log(req, 'update_user', 'users', u.id, { role, name, email, passwordChanged: !!password });
   const fresh = db.prepare('SELECT id, name, email, role, streak, avatar_color, username FROM users WHERE id = ?').get(u.id);
+  scheduleDbBackup(2000);
   res.json({ ok: true, user: fresh });
 });
 
@@ -681,7 +692,8 @@ router.get('/b2/status', async (_req, res) => {
       configured: true,
       bucket: b2.B2_BUCKET_NAME,
       filesCount: files.length,
-      files: files.slice(0, 50).map((f) => ({ name: f.fileName, size: f.contentLength, uploaded: f.uploadTimestamp }))
+      files: files.slice(0, 50).map((f) => ({ name: f.fileName, size: f.contentLength, uploaded: f.uploadTimestamp })),
+      dbBackup: getBackupStatus()
     });
   } catch (err) {
     res.status(500).json({ configured: false, error: err.message });
@@ -691,8 +703,31 @@ router.get('/b2/status', async (_req, res) => {
 router.post('/b2/sync-to-cloud', async (req, res) => {
   try {
     const result = await b2.syncLocalPapersToB2();
-    log(req, 'b2_sync_to_cloud', 'b2', null, result);
-    res.json({ ok: true, ...result, message: `Uploaded ${result.uploaded} papers to Backblaze B2!` });
+    const dbResult = await backupDatabaseToB2();
+    log(req, 'b2_sync_to_cloud', 'b2', null, { ...result, dbBackup: dbResult });
+    res.json({
+      ok: true,
+      ...result,
+      dbBackup: dbResult,
+      message: `Synced ${result.uploaded} papers and backed up database to Backblaze B2!`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/b2/backup-db', async (req, res) => {
+  try {
+    const dbResult = await backupDatabaseToB2();
+    if (!dbResult.success) {
+      return res.status(500).json({ ok: false, error: dbResult.error || dbResult.reason });
+    }
+    log(req, 'b2_backup_db', 'b2', null, dbResult);
+    res.json({
+      ok: true,
+      ...dbResult,
+      message: `Database backed up to Backblaze B2 (${Math.round(dbResult.size / 1024)} KB) successfully!`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -700,11 +735,18 @@ router.post('/b2/sync-to-cloud', async (req, res) => {
 
 router.post('/b2/restore-from-cloud', async (req, res) => {
   try {
+    const dbRes = await restoreDatabaseFromB2({ force: true });
     const result = await b2.restorePapersFromB2();
     const { importTestFolder } = require('../lib/importPack');
     const imported = importTestFolder(db);
-    log(req, 'b2_restore_from_cloud', 'b2', null, { restored: result.restored, imported: imported.length });
-    res.json({ ok: true, restored: result.restored, imported: imported.length, message: `Restored ${result.restored} papers from Backblaze B2 and synced database!` });
+    log(req, 'b2_restore_from_cloud', 'b2', null, { restored: result.restored, imported: imported.length, dbRestore: dbRes });
+    res.json({
+      ok: true,
+      dbRestore: dbRes,
+      restored: result.restored,
+      imported: imported.length,
+      message: `Restored database and ${result.restored} papers from Backblaze B2!`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { api } from '../lib/api';
-import { Calculator, Lightbulb, Pause, Flag, Send, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Calculator, Lightbulb, Pause, Flag, Send, ChevronLeft, ChevronRight, Lock, LayoutGrid, X } from 'lucide-react';
 import MathText from '../components/MathText.jsx';
 import ScientificCalculator from '../components/ScientificCalculator.jsx';
 
@@ -30,6 +30,7 @@ export default function ExamLive() {
   const [showCalc, setShowCalc] = useState(false);
   const [calc, setCalc] = useState('');
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const seen = useRef(new Set());
   const lastTick = useRef(Date.now());
@@ -287,66 +288,65 @@ export default function ExamLive() {
     <div className="exam-live">
       {toast && <div className="live-toast">{toast}</div>}
       <header className="exam-top">
-        <div className="brand-mark" style={{ width: 28, height: 28, fontSize: 14, borderRadius: 8 }}>A</div>
-        <div className="title">{bundle.exam.title}</div>
-        {settings?.hints_enabled && (
-          isLadderMode ? (
-            <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
-              <Lightbulb size={14} color="#F0B429" />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>
-                Ladder: Q.{idx + 1} ({unlocked.length}/3 hints)
-              </span>
-              <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    style={{
-                      display: 'inline-block',
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: i < unlocked.length ? '#1B9468' : 'rgba(255,255,255,0.22)'
-                    }}
-                  />
-                ))}
-              </span>
-            </div>
-          ) : totalLifelines > 0 && (
-            <div className="hint-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#26211c', padding: '6px 12px', borderRadius: 999 }}>
-              <Lightbulb size={14} color="#F0B429" />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>
-                Lifelines: {remainingLifelines}/{totalLifelines}
-              </span>
-              <span style={{ display: 'inline-flex', gap: 3, marginLeft: 2 }}>
-                {Array.from({ length: totalLifelines }).map((_, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      display: 'inline-block',
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: i < remainingLifelines ? '#F0B429' : 'rgba(255,255,255,0.22)'
-                    }}
-                  />
-                ))}
-              </span>
-            </div>
-          )
-        )}
-        {settings?.calculator && (
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowCalc((v) => !v)}><Calculator size={14} /> Calc</button>
-        )}
-        {settings?.bilingual && (
-          <button className="btn btn-sm btn-ghost" onClick={() => setLang((l) => l === 'en' ? 'hi' : 'en')}>{lang === 'en' ? 'हिन्दी' : 'EN'}</button>
-        )}
-        {settings?.allow_pause && (
-          <button className="btn btn-sm btn-ghost" onClick={() => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); }}>
-            <Pause size={14} /> {paused ? 'Resume' : 'Pause'}
+        <div className="exam-top-main">
+          <div className="exam-top-left">
+            <div className="brand-mark" style={{ width: 28, height: 28, fontSize: 13, borderRadius: 8 }}>A</div>
+            <div className="exam-top-title" title={bundle.exam.title}>{bundle.exam.title}</div>
+          </div>
+          <div className="exam-top-right">
+            {settings?.show_timer && (
+              <div className={`timer ${remaining < 60 ? 'warn' : ''}`}>
+                {fmt(remaining)}
+              </div>
+            )}
+            <button className="btn btn-sm btn-amber exam-submit-btn" onClick={() => submit(false)} disabled={busy}>
+              <Send size={14} /> <span>Submit</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Secondary mobile & desktop action toolbar */}
+        <div className="exam-top-sub">
+          <button
+            type="button"
+            className="btn btn-sm exam-palette-toggle"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Open Question Palette"
+          >
+            <LayoutGrid size={14} />
+            <span>Q.{idx + 1} of {questions.length}</span>
+            <span className="exam-sub-count">{counts.answered}/{questions.length} answered</span>
           </button>
-        )}
-        {settings?.show_timer && <div className={`timer ${remaining < 60 ? 'warn' : ''}`}>{fmt(remaining)}</div>}
-        <button className="btn btn-sm btn-amber" onClick={() => submit(false)} disabled={busy}><Send size={14} /> Submit</button>
+
+          {settings?.calculator && (
+            <button type="button" className="btn btn-sm btn-ghost exam-sub-btn" onClick={() => setShowCalc((v) => !v)}>
+              <Calculator size={14} /> <span>Calc</span>
+            </button>
+          )}
+          {settings?.bilingual && (
+            <button type="button" className="btn btn-sm btn-ghost exam-sub-btn" onClick={() => setLang((l) => l === 'en' ? 'hi' : 'en')}>
+              <span>{lang === 'en' ? 'हिन्दी' : 'EN'}</span>
+            </button>
+          )}
+          {settings?.allow_pause && (
+            <button type="button" className="btn btn-sm btn-ghost exam-sub-btn" onClick={() => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); }}>
+              <Pause size={14} /> <span>{paused ? 'Resume' : 'Pause'}</span>
+            </button>
+          )}
+          {settings?.hints_enabled && (
+            isLadderMode ? (
+              <div className="hint-pill compact">
+                <Lightbulb size={13} color="#F0B429" />
+                <span>Hints: {unlocked.length}/3</span>
+              </div>
+            ) : totalLifelines > 0 && (
+              <div className="hint-pill compact">
+                <Lightbulb size={13} color="#F0B429" />
+                <span>Hints: {remainingLifelines}/{totalLifelines}</span>
+              </div>
+            )
+          )}
+        </div>
       </header>
 
       <div className="exam-body">
@@ -501,7 +501,7 @@ export default function ExamLive() {
           )}
         </div>
         {settings?.show_palette !== false && (
-          <aside className="palette">
+          <aside className="palette desktop-palette">
             <h4>Question palette</h4>
             <div className="p-grid">
               {questions.map((qq, i) => (
@@ -518,56 +518,138 @@ export default function ExamLive() {
         )}
       </div>
 
+      {/* Mobile Question Palette Drawer */}
+      {paletteOpen && (
+        <div className="palette-drawer-backdrop" onClick={() => setPaletteOpen(false)}>
+          <div className="palette-drawer-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="palette-drawer-head">
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Question Palette</h3>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                  <b style={{ color: '#1B9468' }}>{counts.answered}</b> answered · <b style={{ color: '#5B45EA' }}>{counts.marked}</b> marked · <b>{counts.left}</b> left
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setPaletteOpen(false)}
+                aria-label="Close palette"
+                style={{ width: 34, height: 34, border: 0, background: 'rgba(26,22,18,0.06)', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {sections.length > 1 && (
+              <div className="sec-tabs" style={{ margin: '10px 0 14px' }}>
+                {sections.map((s) => (
+                  <button
+                    key={s}
+                    className={`sec-tab ${q.section === s ? 'on' : ''}`}
+                    onClick={() => {
+                      const i = questions.findIndex((qq) => qq.section === s);
+                      if (i >= 0) {
+                        go(i);
+                        setPaletteOpen(false);
+                      }
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="p-grid p-grid-mobile">
+              {questions.map((qq, i) => (
+                <button
+                  key={qq.id}
+                  className={`p-btn ${statusOf(qq)}`}
+                  onClick={() => {
+                    go(i);
+                    setPaletteOpen(false);
+                  }}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <div className="legend" style={{ marginTop: 14 }}>
+              <div><i style={{ background: '#1B9468' }} /> Answered ({counts.answered})</div>
+              <div><i style={{ background: '#5B45EA' }} /> Marked ({counts.marked})</div>
+              <div><i style={{ background: '#E24B4A' }} /> Seen, unanswered</div>
+              <div><i style={{ background: '#EFE8D8', border: '1px solid #C4B9A8' }} /> Not visited ({counts.left})</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="exam-foot">
-        <button className="btn btn-line" onClick={() => go(idx - 1)} disabled={idx === 0}><ChevronLeft size={16} /> Previous</button>
-        <button className="btn btn-line" onClick={clearOption}>Clear</button>
-        {settings?.mark_for_review && (
-          <button className={`btn ${answers[q.id]?.marked ? 'btn-violet' : 'btn-line'}`} onClick={toggleMark}>
-            <Flag size={14} /> {answers[q.id]?.marked ? 'Marked' : 'Mark for review'}
+        <button
+          className="btn btn-line foot-nav-btn"
+          onClick={() => go(idx - 1)}
+          disabled={idx === 0}
+          aria-label="Previous Question"
+        >
+          <ChevronLeft size={16} /> <span>Prev</span>
+        </button>
+
+        <div className="foot-actions-mid">
+          <button className="btn btn-line foot-btn" onClick={clearOption} title="Clear selected option">
+            Clear
           </button>
-        )}
-        {settings?.hints_enabled && (
-          isLadderMode ? (
+          {settings?.mark_for_review && (
             <button
-              className="btn btn-line"
-              style={{
-                color: unlocked.length > 0 ? '#137333' : '#9A6B00',
-                borderColor: unlocked.length > 0 ? '#CEEAD6' : '#F0B429'
-              }}
-              onClick={useHint}
-              disabled={unlocked.length >= 3}
-              title={unlocked.length < 3 ? `Reveal hint ${unlocked.length + 1} of 3` : 'All 3 hints unlocked'}
+              className={`btn foot-btn ${answers[q.id]?.marked ? 'btn-violet' : 'btn-line'}`}
+              onClick={toggleMark}
+              title="Mark for review"
             >
-              <Lightbulb size={14} />
-              {unlocked.length === 0
-                ? 'Reveal Hint (1/3)'
-                : unlocked.length < 3
-                  ? `Reveal Next Hint (${unlocked.length + 1}/3)`
-                  : '3 Hints Unlocked'}
+              <Flag size={14} /> <span>{answers[q.id]?.marked ? 'Marked' : 'Mark'}</span>
             </button>
-          ) : totalLifelines > 0 && (
-            <button
-              className="btn btn-line"
-              style={{
-                color: hasUnlockedOnQ ? '#137333' : remainingLifelines > 0 ? '#9A6B00' : 'var(--muted)',
-                borderColor: hasUnlockedOnQ ? '#CEEAD6' : remainingLifelines > 0 ? '#F0B429' : 'var(--border)'
-              }}
-              onClick={useHint}
-              disabled={hasUnlockedOnQ || remainingLifelines <= 0}
-              title={hasUnlockedOnQ ? 'Hint already unlocked on this Q' : remainingLifelines > 0 ? `Use 1 lifeline (${remainingLifelines} left)` : '0 Lifelines left'}
-            >
-              <Lightbulb size={14} />
-              {hasUnlockedOnQ
-                ? 'Hint active on this Q'
-                : remainingLifelines > 0
-                  ? `Hint Lifelines (${remainingLifelines} left)`
-                  : '0 Lifelines left'}
-            </button>
-          )
-        )}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-violet" onClick={() => (idx === questions.length - 1 ? submit(false) : go(idx + 1))}>
-          {idx === questions.length - 1 ? 'Review & submit' : <>Save & next <ChevronRight size={16} /></>}
+          )}
+          {settings?.hints_enabled && (
+            isLadderMode ? (
+              <button
+                className="btn btn-line foot-btn"
+                style={{
+                  color: unlocked.length > 0 ? '#137333' : '#9A6B00',
+                  borderColor: unlocked.length > 0 ? '#CEEAD6' : '#F0B429'
+                }}
+                onClick={useHint}
+                disabled={unlocked.length >= 3}
+                title={unlocked.length < 3 ? `Reveal hint ${unlocked.length + 1} of 3` : 'All 3 hints unlocked'}
+              >
+                <Lightbulb size={14} />
+                <span>{unlocked.length === 0 ? 'Hint 1' : unlocked.length < 3 ? `Hint ${unlocked.length + 1}` : '3 Hints'}</span>
+              </button>
+            ) : totalLifelines > 0 && (
+              <button
+                className="btn btn-line foot-btn"
+                style={{
+                  color: hasUnlockedOnQ ? '#137333' : remainingLifelines > 0 ? '#9A6B00' : 'var(--muted)',
+                  borderColor: hasUnlockedOnQ ? '#CEEAD6' : remainingLifelines > 0 ? '#F0B429' : 'var(--border)'
+                }}
+                onClick={useHint}
+                disabled={hasUnlockedOnQ || remainingLifelines <= 0}
+                title={hasUnlockedOnQ ? 'Hint already unlocked on this Q' : remainingLifelines > 0 ? `Use 1 lifeline (${remainingLifelines} left)` : '0 Lifelines left'}
+              >
+                <Lightbulb size={14} />
+                <span>{hasUnlockedOnQ ? 'Hint on' : `Hint (${remainingLifelines})`}</span>
+              </button>
+            )
+          )}
+        </div>
+
+        <button
+          className="btn btn-violet foot-nav-btn foot-next-btn"
+          onClick={() => (idx === questions.length - 1 ? submit(false) : go(idx + 1))}
+          aria-label={idx === questions.length - 1 ? 'Review & Submit' : 'Save & Next'}
+        >
+          {idx === questions.length - 1 ? (
+            'Review & submit'
+          ) : (
+            <>
+              <span>Next</span> <ChevronRight size={16} />
+            </>
+          )}
         </button>
       </footer>
 

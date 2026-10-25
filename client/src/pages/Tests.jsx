@@ -101,11 +101,13 @@ export default function Tests() {
   // Completed stats
   const completedCount = useMemo(() => exams.filter((e) => e.my && e.my.n > 0).length, [exams]);
   const unattemptedCount = Math.max(0, exams.length - completedCount);
+  const newCount = useMemo(() => exams.filter((e) => Boolean(e.is_new)).length, [exams]);
 
   // Final filtered list
   const list = useMemo(() => exams.filter((e) => {
     if (type && e.type !== type) return false;
     if (family && e.exam_family !== family) return false;
+    if (statusFilter === 'new' && !e.is_new) return false;
     if (statusFilter === 'attempted' && (!e.my || !e.my.n)) return false;
     if (statusFilter === 'unattempted' && (e.my && e.my.n > 0)) return false;
     if (q && !`${e.title} ${e.subject || ''} ${e.code}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -191,6 +193,27 @@ export default function Tests() {
           >
             All papers ({exams.length})
           </button>
+          {newCount > 0 && (
+            <button
+              type="button"
+              className={`btn btn-sm ${statusFilter === 'new' ? 'btn-amber' : 'btn-line'}`}
+              style={{
+                borderRadius: 999,
+                padding: '4px 12px',
+                fontSize: 12,
+                background: statusFilter === 'new' ? 'linear-gradient(135deg, #FF3B30, #FF9500)' : undefined,
+                color: statusFilter === 'new' ? '#fff' : '#FF3B30',
+                borderColor: statusFilter === 'new' ? '#FF3B30' : 'rgba(255, 59, 48, 0.4)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+              onClick={() => setStatusFilter('new')}
+            >
+              <Sparkles size={12} strokeWidth={2.8} /> Newly Uploaded ({newCount})
+            </button>
+          )}
           <button
             type="button"
             className={`btn btn-sm ${statusFilter === 'attempted' ? 'btn-green' : 'btn-line'}`}
@@ -238,6 +261,26 @@ export default function Tests() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, width: '100%', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {Boolean(e.is_new) && (
+                    <span
+                      className="tag new-pill"
+                      style={{
+                        background: 'linear-gradient(135deg, #FF3B30, #FF9500)',
+                        color: '#fff',
+                        fontWeight: 800,
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 999,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3.5,
+                        boxShadow: '0 2px 8px rgba(255, 59, 48, 0.35)',
+                        letterSpacing: '0.4px'
+                      }}
+                    >
+                      <Sparkles size={11} strokeWidth={2.8} /> NEW
+                    </span>
+                  )}
                   <span className={`tag ${e.type === 'high_influence_pk' || e.type === 'high_influence' ? 'gold' : e.type === 'full_mock' || e.type === 'full' ? 'ink' : ''}`}>
                     {typeLabel(e.type)}
                   </span>

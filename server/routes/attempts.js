@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { parseHints, buildHints, maxHintLevels, easyWhy, teach } = require('../lib/hints');
+const { scheduleDbBackup } = require('../lib/dbBackup');
 
 const router = express.Router();
 
@@ -146,6 +147,7 @@ router.post('/start', auth(), (req, res) => {
     VALUES (?, ?, 'in_progress', ?, ?, ?, ?, ?, '{}')
   `).run(req.user.id, exam.id, exam.duration_sec, exam.extra_time_sec || 0, first?.id || null, first?.section || null, JSON.stringify(settings));
   const attempt = db.prepare('SELECT * FROM attempts WHERE id = ?').get(info.lastInsertRowid);
+  scheduleDbBackup(2000);
   return payloadForAttempt(attempt, res);
 });
 
@@ -208,6 +210,7 @@ router.post('/:id/save', auth(), (req, res) => {
     UPDATE attempts SET answers_json = ?, current_qid = ?, current_section = ?, hints_used = COALESCE(?, hints_used)
     WHERE id = ?
   `).run(JSON.stringify(answers || {}), current_qid || attempt.current_qid, current_section || attempt.current_section, hints_used ?? null, attempt.id);
+  scheduleDbBackup(10000);
   res.json({ ok: true });
 });
 
@@ -338,6 +341,7 @@ router.post('/:id/submit', auth(), (req, res) => {
     WHERE id = ?
   `).run(result.score, result.max, result.correct, result.wrong, result.skipped, result.accuracy, fresh.id);
   db.prepare("UPDATE users SET last_active = datetime('now'), streak = streak + 1 WHERE id = ?").run(req.user.id);
+  scheduleDbBackup(1000);
   res.json({ attemptId: fresh.id, result: { score: result.score, max: result.max, correct: result.correct, wrong: result.wrong, skipped: result.skipped, accuracy: result.accuracy } });
 });
 

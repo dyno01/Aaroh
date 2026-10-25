@@ -90,6 +90,54 @@ export default function AdminImport() {
     });
   }
 
+async function scanFilesRecursively(dataTransfer) {
+  const items = dataTransfer.items;
+  if (!items || !items.length) {
+    return Array.from(dataTransfer.files || []);
+  }
+
+  const queue = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (typeof item.webkitGetAsEntry === 'function') {
+      const entry = item.webkitGetAsEntry();
+      if (entry) queue.push(entry);
+    }
+  }
+
+  if (!queue.length) {
+    return Array.from(dataTransfer.files || []);
+  }
+
+  const collectedFiles = [];
+
+  async function readEntriesPromise(reader) {
+    return new Promise((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
+  }
+
+  while (queue.length > 0) {
+    const entry = queue.shift();
+    if (entry.isFile) {
+      const file = await new Promise((resolve) => entry.file(resolve));
+      const lower = (file.name || '').toLowerCase();
+      if (lower.endsWith('.csv') || lower.endsWith('.json') || lower.endsWith('.zip')) {
+        collectedFiles.push(file);
+      }
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let entries = await readEntriesPromise(reader);
+      while (entries && entries.length > 0) {
+        queue.push(...entries);
+        entries = await readEntriesPromise(reader);
+      }
+    }
+  }
+
+  return collectedFiles;
+}
+
   async function doPreview(f) {
     const fd = new FormData();
     fd.append('file', f);
@@ -105,13 +153,22 @@ export default function AdminImport() {
     doPreview(f).catch((err) => toast.push(err.message));
   }
 
-  function handleDrop(e, targetTab = 'single') {
+  async function handleDrop(e, targetTab = 'single') {
     e.preventDefault();
     setHot(false);
-    const files = Array.from(e.dataTransfer.files || []);
-    if (!files.length) return;
+    let files = [];
+    try {
+      files = await scanFilesRecursively(e.dataTransfer);
+    } catch {
+      files = Array.from(e.dataTransfer.files || []);
+    }
+    if (!files.length) {
+      toast.push('No .csv, .json, or .zip files found in dropped folder or files.');
+      return;
+    }
 
-    if (files.length > 1 || targetTab === 'bulk') {
+    const firstIsZip = (files[0].name || '').toLowerCase().endsWith('.zip');
+    if (files.length > 1 || targetTab === 'bulk' || firstIsZip) {
       setTab('bulk');
       loadBulkFiles(files);
     } else {
@@ -134,7 +191,7 @@ export default function AdminImport() {
       fd.append('saveToDisk', '1');
       const r = await api('/api/import/commit', { method: 'POST', body: fd, isForm: true });
       setSummary(r.summary);
-      toast.push(`✓ Imported & saved ${r.summary.length} paper(s) to database and test/ folder`);
+      toast.push(`✓ Imported & saved ${r.summary.length} paper(s) to database and test/ folder (marked as NEW)`);
     } catch (e) {
       toast.push(`Import failed: ${e.message}`);
     } finally {
@@ -143,11 +200,12 @@ export default function AdminImport() {
   }
 
   async function loadBulkFiles(filesList) {
-    const valid = Array.from(filesList).filter((f) =>
-      f.name.endsWith('.csv') || f.name.endsWith('.json')
-    );
+    const valid = Array.from(filesList).filter((f) => {
+      const name = (f.name || '').toLowerCase();
+      return name.endsWith('.csv') || name.endsWith('.json') || name.endsWith('.zip');
+    });
     if (!valid.length) {
-      toast.push('Please drop or select .csv or .json files.');
+      toast.push('Please drop or select .csv, .json, or .zip files, or choose a folder.');
       return;
     }
     setBulkFiles(valid);
@@ -292,17 +350,17 @@ export default function AdminImport() {
           >
             <div className="ico" style={{ margin: '0 auto 10px' }}><Upload size={20} /></div>
             <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>
-              {file ? file.name : 'Drop a CSV or JSON paper here'}
+              {file ? file.name : 'Drop a CSV, JSON, or ZIP paper here'}
             </p>
             <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-              (Tip: If you drop multiple files, it automatically switches to Bulk Import mode!)
+              (Tip: If you drop a ZIP or multiple files, it automatically unpacks in Bulk Import mode!)
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
               <label className="btn btn-sm btn-line" style={{ display: 'inline-flex', cursor: 'pointer' }}>
-                Choose file
+                Choose file / ZIP
                 <input
                   type="file"
-                  accept=".csv,.json,text/csv,application/json"
+                  accept=".csv,.json,.zip,text/csv,application/json,application/zip"
                   hidden
                   onChange={(e) => takeSingleFile(e.target.files?.[0])}
                 />
@@ -519,17 +577,28 @@ export default function AdminImport() {
             <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
               {bulkFiles.length > 0
                 ? `${bulkFiles.length} file(s) selected for bulk import`
-                : 'Drop multiple CSV or JSON files here'}
+                : 'Drop ZIP archive (.zip), Folder, or multiple CSV/JSON files here'}
             </p>
             <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-              Select 2, 5, 20, or 50+ question papers at once. All will be imported and saved to the <code>test/</code> directory.
+              Drop a ZIP archive, an entire directory of papers, or multiple CSV files. All tests are automatically extracted, marked with the <b>★ NEW</b> badge, and saved to the <code>test/</code> directory.
             </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
-              <label className="btn btn-sm btn-violet" style={{ display: 'inline-flex', cursor: 'pointer', fontWeight: 700 }}>
-                Choose multiple files
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+              <label className="btn btn-sm btn-violet" style={{ display: 'inline-flex', cursor: 'pointer', fontWeight: 700, alignItems: 'center', gap: 6 }}>
+                <Layers size={14} /> Choose CSV / JSON / ZIP files
                 <input
                   type="file"
-                  accept=".csv,.json,text/csv,application/json"
+                  accept=".csv,.json,.zip,text/csv,application/json,application/zip"
+                  multiple
+                  hidden
+                  onChange={(e) => loadBulkFiles(e.target.files)}
+                />
+              </label>
+              <label className="btn btn-sm btn-line" style={{ display: 'inline-flex', cursor: 'pointer', fontWeight: 700, alignItems: 'center', gap: 6 }}>
+                <FolderSync size={14} /> Upload Entire Folder
+                <input
+                  type="file"
+                  webkitdirectory=""
+                  directory=""
                   multiple
                   hidden
                   onChange={(e) => loadBulkFiles(e.target.files)}

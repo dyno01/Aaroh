@@ -87,7 +87,7 @@ export default function Home() {
           </div>
         </div>
         <div>
-          <div className="kpi-row" style={{ marginTop: 0, gridTemplateColumns: '1fr 1fr 1fr' }}>
+          <div className="kpi-row" style={{ marginTop: 0 }}>
             <button className="kpi click" onClick={() => nav('/app/analytics')}><Trophy size={16} className="ico-sm" /><div className="n">{stats?.tests_taken || 0}</div><div className="l">Tests sat</div></button>
             <button className="kpi click" onClick={() => nav('/app/analytics')}><Target size={16} className="ico-sm" /><div className="n">{Math.round(stats?.avg_accuracy || 0)}%</div><div className="l">Accuracy</div></button>
             <button className="kpi click" onClick={() => nav('/app/you')}><Flame size={16} className="ico-sm" /><div className="n">{user?.streak || 0}</div><div className="l">Streak</div></button>
