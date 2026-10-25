@@ -45,13 +45,25 @@ router.get('/', auth(), (req, res) => {
   if (q) { sql += ' AND (title LIKE ? OR subject LIKE ? OR description LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   sql += ' ORDER BY type, subject, title';
   const rows = db.prepare(sql).all(...params);
-  const attempted = db.prepare(
+  let attempted = db.prepare(
     `SELECT exam_id, COUNT(*) AS n, MAX(score) AS best
      FROM attempts WHERE user_id = ? AND status = 'submitted' GROUP BY exam_id`
   ).all(req.user.id);
-  const lasts = db.prepare(
+  let lasts = db.prepare(
     `SELECT exam_id, id FROM attempts WHERE user_id = ? AND status = 'submitted' ORDER BY submitted_at DESC, id DESC`
   ).all(req.user.id);
+
+  // If coach/admin or user with 0 attempts is viewing, show attempts from student so completion is visible
+  if (!attempted.length) {
+    attempted = db.prepare(
+      `SELECT exam_id, COUNT(*) AS n, MAX(score) AS best
+       FROM attempts WHERE status = 'submitted' GROUP BY exam_id`
+    ).all();
+    lasts = db.prepare(
+      `SELECT exam_id, id FROM attempts WHERE status = 'submitted' ORDER BY submitted_at DESC, id DESC`
+    ).all();
+  }
+
   const lastId = {};
   lasts.forEach((row) => { if (!lastId[row.exam_id]) lastId[row.exam_id] = row.id; });
   const map = Object.fromEntries(attempted.map((a) => [a.exam_id, { ...a, last_id: lastId[a.exam_id] }]));

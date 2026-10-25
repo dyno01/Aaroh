@@ -181,68 +181,46 @@ export default function Tests() {
         </label>
       </div>
 
-      {/* Status quick toggle bar so student immediately sees progress */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 0 18px', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status:</span>
+      {/* Status quick toggle bar with smooth touch horizontal scroll */}
+      <div className="status-bar-container">
+        <div className="status-scroll-track">
+          <span className="status-tag-label">Status:</span>
           <button
             type="button"
-            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-ink' : 'btn-line'}`}
-            style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12 }}
+            className={`status-pill ${statusFilter === 'all' ? 'active-ink' : ''}`}
             onClick={() => setStatusFilter('all')}
           >
-            All papers ({exams.length})
+            All papers <span className="pill-count">{exams.length}</span>
           </button>
           {newCount > 0 && (
             <button
               type="button"
-              className={`btn btn-sm ${statusFilter === 'new' ? 'btn-amber' : 'btn-line'}`}
-              style={{
-                borderRadius: 999,
-                padding: '4px 12px',
-                fontSize: 12,
-                background: statusFilter === 'new' ? 'linear-gradient(135deg, #FF3B30, #FF9500)' : undefined,
-                color: statusFilter === 'new' ? '#fff' : '#FF3B30',
-                borderColor: statusFilter === 'new' ? '#FF3B30' : 'rgba(255, 59, 48, 0.4)',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4
-              }}
+              className={`status-pill new-filter ${statusFilter === 'new' ? 'active-new' : ''}`}
               onClick={() => setStatusFilter('new')}
             >
-              <Sparkles size={12} strokeWidth={2.8} /> Newly Uploaded ({newCount})
+              <Sparkles size={12} strokeWidth={2.8} /> Newly Uploaded <span className="pill-count">{newCount}</span>
             </button>
           )}
           <button
             type="button"
-            className={`btn btn-sm ${statusFilter === 'attempted' ? 'btn-green' : 'btn-line'}`}
-            style={{
-              borderRadius: 999,
-              padding: '4px 12px',
-              fontSize: 12,
-              background: statusFilter === 'attempted' ? '#137333' : undefined,
-              color: statusFilter === 'attempted' ? '#fff' : undefined,
-              borderColor: statusFilter === 'attempted' ? '#137333' : undefined
-            }}
+            className={`status-pill ${statusFilter === 'attempted' ? 'active-green' : ''}`}
             onClick={() => setStatusFilter('attempted')}
           >
-            ✓ Attempted ({completedCount})
+            <CheckCircle2 size={12} strokeWidth={2.6} /> Attempted <span className="pill-count">{completedCount}</span>
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${statusFilter === 'unattempted' ? 'btn-ink' : 'btn-line'}`}
-            style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12 }}
+            className={`status-pill ${statusFilter === 'unattempted' ? 'active-ink' : ''}`}
             onClick={() => setStatusFilter('unattempted')}
           >
-            Not attempted ({unattemptedCount})
+            Not attempted <span className="pill-count">{unattemptedCount}</span>
           </button>
         </div>
 
         {completedCount > 0 && (
-          <div style={{ fontSize: 12, color: '#137333', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div className="completion-badge">
             <CheckCircle2 size={14} strokeWidth={2.4} />
-            <span>You completed {completedCount} of {exams.length} papers ({Math.round((completedCount / (exams.length || 1)) * 100)}%)</span>
+            <span>Completed {completedCount} of {exams.length} papers ({Math.round((completedCount / (exams.length || 1)) * 100)}%)</span>
           </div>
         )}
       </div>
@@ -333,8 +311,8 @@ export default function Tests() {
                 {e.max_hints > 0 && <span>{e.max_hints} hints</span>}
               </div>
 
-              <div className="foot" style={{ paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                <div>
+              <div className="foot" style={{ paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   {isAttempted ? (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#137333', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -351,10 +329,10 @@ export default function Tests() {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                   {e.my?.last_id && (
                     <button
-                      className="btn btn-sm btn-line"
+                      className="btn btn-sm btn-line test-card-btn"
                       type="button"
                       title="Review questions & solutions"
                       onClick={() => nav(`/app/result/${e.my.last_id}`)}
@@ -363,7 +341,7 @@ export default function Tests() {
                     </button>
                   )}
                   <button
-                    className={`btn btn-sm ${isAttempted ? 'btn-line' : 'btn-violet'}`}
+                    className={`btn btn-sm ${isAttempted ? 'btn-line' : 'btn-violet'} test-card-btn`}
                     type="button"
                     onClick={() => nav(`/app/exam/${e.id}`)}
                   >
