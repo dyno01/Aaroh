@@ -237,17 +237,35 @@ router.get('/students', (_req, res) => {
 });
 
 router.patch('/students/:id', (req, res) => {
-  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!u) return res.status(404).json({ error: 'Not found' });
-  const { role, name, password } = req.body || {};
-  if (role) db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, u.id);
-  if (name) db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, u.id);
+  const targetId = Number(req.params.id);
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const { role, name, email, password } = req.body || {};
+
+  // Protect against admin accidentally removing their own admin role
+  if (role && u.id === req.user.id && role !== 'admin') {
+    return res.status(400).json({ error: 'You cannot remove your own admin privileges.' });
+  }
+
+  if (role && ['admin', 'student'].includes(role)) {
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, u.id);
+  }
+  if (name && String(name).trim()) {
+    db.prepare('UPDATE users SET name = ? WHERE id = ?').run(String(name).trim().slice(0, 80), u.id);
+  }
+  if (email && String(email).trim()) {
+    const em = String(email).trim().toLowerCase();
+    const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(em, u.id);
+    if (existing) return res.status(409).json({ error: 'That email is already registered by another user' });
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(em, u.id);
+  }
   if (password && String(password).trim().length >= 6) {
     const hash = bcrypt.hashSync(String(password).trim(), 10);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, u.id);
   }
-  log(req, 'update_user', 'users', u.id, { role, name, passwordChanged: !!password });
-  res.json({ ok: true });
+  log(req, 'update_user', 'users', u.id, { role, name, email, passwordChanged: !!password });
+  const fresh = db.prepare('SELECT id, name, email, role, streak, avatar_color, username FROM users WHERE id = ?').get(u.id);
+  res.json({ ok: true, user: fresh });
 });
 
 router.delete('/students/:id', (req, res) => {
@@ -256,6 +274,9 @@ router.delete('/students/:id', (req, res) => {
   if (!u) return res.status(404).json({ error: 'User not found' });
   if (req.user.id === u.id) {
     return res.status(400).json({ error: 'You cannot delete your own account while logged in' });
+  }
+  if (u.email === 'ishwar@aaroh.in' || u.name === 'Ishwar Rathod') {
+    return res.status(400).json({ error: 'Cannot delete the primary administrator account' });
   }
   db.prepare('DELETE FROM attempts WHERE user_id = ?').run(u.id);
   db.prepare('DELETE FROM users WHERE id = ?').run(u.id);

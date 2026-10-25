@@ -99,11 +99,8 @@ export default function Auth({ mode }) {
               {busy ? 'Signing you in…' : isReg ? 'Create account' : 'Enter hall'}
             </button>
           </form>
-          <div className="demo-row">
-            <button type="button" className="chip" onClick={() => fill('demo@aaroh.in')}>⚡ Try sample student demo</button>
-          </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-            Coaches & administrators sign in using your private email and password.
+          <div style={{ marginTop: 14, fontSize: 13, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            Students and Administrators sign in with your email and password.
           </div>
           <p className="muted" style={{ marginTop: 18 }}>
             {isReg ? <>Already seated? <Link to="/login">Sign in</Link></> : <>New here? <Link to="/register">Create account</Link></>}

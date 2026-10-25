@@ -178,20 +178,72 @@ try {
 }
 
 try {
-  const n = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-  if (n === 0) {
-    const bcrypt = require('bcryptjs');
-    const hash = bcrypt.hashSync('Aaroh@123', 10);
-    db.prepare(
-      "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES (?, ?, ?, 'admin', '#5B45EA', 'coach', 0)"
-    ).run('Coach', 'admin@aaroh.in', hash);
-    db.prepare(
-      "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES (?, ?, ?, 'student', '#F0B429', 'nikita', 0)"
-    ).run('Nikita Rathod', 'demo@aaroh.in', hash);
-    console.log('Created demo accounts admin@aaroh.in / demo@aaroh.in');
+  const bcrypt = require('bcryptjs');
+  const hash = bcrypt.hashSync('Password@123', 10);
+  const legacyHash = bcrypt.hashSync('Aaroh@123', 10);
+
+  // 1. Purge dummy mock students Diya, Kabir, Ananya and their attempts
+  const mockUserIds = db.prepare(`
+    SELECT id FROM users WHERE email IN ('diya@aaroh.in', 'kabir@aaroh.in', 'ananya@aaroh.in')
+    OR name IN ('Diya Nair', 'Kabir Bose', 'Ananya Rao')
+  `).all().map((r) => r.id);
+  if (mockUserIds.length > 0) {
+    const placeholders = mockUserIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM attempts WHERE user_id IN (${placeholders})`).run(...mockUserIds);
+    db.prepare(`DELETE FROM users WHERE id IN (${placeholders})`).run(...mockUserIds);
+    console.log(`Cleaned up ${mockUserIds.length} mock student accounts.`);
   }
+
+  // 2. Setup Ishwar Rathod as primary Admin
+  const adminRow = db.prepare("SELECT * FROM users WHERE email = 'ishwar@aaroh.in' OR email = 'admin@aaroh.in' OR role = 'admin' LIMIT 1").get();
+  if (adminRow) {
+    db.prepare(`
+      UPDATE users SET name = 'Ishwar Rathod', username = 'ishwar', role = 'admin', email = 'ishwar@aaroh.in', password_hash = ?
+      WHERE id = ?
+    `).run(hash, adminRow.id);
+  } else {
+    db.prepare(
+      "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES ('Ishwar Rathod', 'ishwar@aaroh.in', ?, 'admin', '#5B45EA', 'ishwar', 0)"
+    ).run(hash);
+  }
+
+  // Also support admin@aaroh.in as backup login for Ishwar
+  const adminBackup = db.prepare("SELECT * FROM users WHERE email = 'admin@aaroh.in'").get();
+  if (adminBackup && adminBackup.id !== (adminRow ? adminRow.id : -1)) {
+    db.prepare("UPDATE users SET name = 'Ishwar Rathod', username = 'admin', role = 'admin', password_hash = ? WHERE id = ?").run(hash, adminBackup.id);
+  } else if (!adminBackup && adminRow && adminRow.email !== 'admin@aaroh.in') {
+    db.prepare(
+      "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES ('Ishwar Rathod', 'admin@aaroh.in', ?, 'admin', '#5B45EA', 'admin', 0)"
+    ).run(hash);
+  }
+
+  // 3. Setup Nikita Rathod as dedicated Student
+  const nikitaRow = db.prepare("SELECT * FROM users WHERE email = 'nikita@aaroh.in' OR email = 'demo@aaroh.in' OR name LIKE '%Nikita%' LIMIT 1").get();
+  if (nikitaRow) {
+    db.prepare(`
+      UPDATE users SET name = 'Nikita Rathod', username = 'nikita', role = 'student', email = 'nikita@aaroh.in', password_hash = ?
+      WHERE id = ?
+    `).run(hash, nikitaRow.id);
+  } else {
+    db.prepare(
+      "INSERT INTO users (name, email, password_hash, role, avatar_color, username, streak) VALUES ('Nikita Rathod', 'nikita@aaroh.in', ?, 'student', '#F0B429', 'nikita', 0)"
+    ).run(hash);
+  }
+
+  console.log('Verified user accounts: Admin (Ishwar Rathod), Student (Nikita Rathod)');
 } catch (e) {
   console.error('ensureUsers', e);
+}
+
+try {
+  const examCount = db.prepare('SELECT COUNT(*) AS c FROM exams').get().c;
+  if (examCount === 0) {
+    console.log('Exams table is empty. Auto-importing test pack from test/ folder...');
+    const { importTestFolder } = require('./lib/importPack');
+    importTestFolder(db);
+  }
+} catch (e) {
+  console.error('autoImportTests', e);
 }
 
 module.exports = db;
